@@ -213,36 +213,36 @@ contract OmniHookTest is Test, Fixtures {
         console2.log("Hook balance in currency0 before swapping: ", hookBalanceBefore0);
         console2.log("Hook balance in currency1 before swapping: ", hookBalanceBefore1);
 
-        console2.log("/// quoter ///");
         (uint256 expectedAmountOut,) = quoter.quoteExactInputSingle(IV4Quoter.QuoteExactSingleParams({
             poolKey: key,
             zeroForOne: zeroForOne,
             exactAmount: uint128(amountToSwap),
             hookData: ZERO_BYTES
         }));
-        console2.log("expectedAmountOut: ", expectedAmountOut);
-        console2.log("/// quoter ///");
 
-        // vm.prank(user);
-        // swapRouter.swap{value: amountToSwap}(key, params, _defaultTestSettings(), ZERO_BYTES);
+        assertEq(expectedAmountOut, 987158034397061298, "amount out");
+
+        vm.prank(user);
+        swapRouter.swap{value: amountToSwap}(key, params, _defaultTestSettings(), ZERO_BYTES);
     
-        // uint256 userBalanceAfter0 = key.currency0.balanceOf(address(user));
-        // uint256 userBalanceAfter1 = key.currency1.balanceOf(address(user));
+        uint256 userBalanceAfter0 = key.currency0.balanceOf(address(user));
+        uint256 userBalanceAfter1 = key.currency1.balanceOf(address(user));
 
-        // uint256 hookBalanceAfter0 = key.currency0.balanceOf(address(hook));
+        uint256 hookBalanceAfter0 = key.currency0.balanceOf(address(hook));
+        uint256 hookBalanceAfter1 = key.currency1.balanceOf(address(hook));
 
-        // console2.log("--- ENDING BALANCES ---");
+        console2.log("--- ENDING BALANCES ---");
 
-        // console2.log("User balance in currency0 after  swapping: ", userBalanceAfter0);
-        // console2.log("User balance in currency1 after  swapping: ", userBalanceAfter1);
-        // console2.log("Hook balance in currency0 after  swapping: ", hookBalanceAfter0);
+        console2.log("User balance in currency0 after  swapping: ", userBalanceAfter0);
+        console2.log("User balance in currency1 after  swapping: ", userBalanceAfter1);
+        console2.log("Hook balance in currency0 after  swapping: ", hookBalanceAfter0);
+        console2.log("Hook balance in currency1 after  swapping: ", hookBalanceAfter1);
 
-        // // 0.01% for 1 eth = 0.0001 eth
-        // uint256 expectedFeeAmount = (amountToSwap * hook.HOOK_FEE_PERCENTAGE()) / hook.FEE_DENOMINATOR(); 
+        assertEq(userBalanceAfter1, userBalanceBefore1 - amountToSwap, "user amount 1");
+        assertEq(userBalanceAfter0, userBalanceBefore0 + expectedAmountOut, "user amount 0");
 
-        // assertEq(userBalanceAfter0, userBalanceBefore0 - amountToSwap, "amount 0");
-        // assertEq(userBalanceAfter1, userBalanceBefore1 + expectedAmountOut, "amount 1");
-        // assertEq(hookBalanceAfter0, hookBalanceBefore0 + expectedFeeAmount, "amount 0");
+        assertEq(hookBalanceAfter0, hookBalanceBefore0, "hook amount 0");
+        assertEq(hookBalanceAfter1, hookBalanceBefore1, "hook amount 1");
     }
 
     /// INTERNAL HELPER FUNCTIONS ///
