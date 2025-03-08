@@ -28,6 +28,9 @@ contract OmniHook is BaseHook, Ownable {
 
         Currency _feeCurrency = params.zeroForOne ? key.currency0 : key.currency1;
         console2.log("feeCurrency: ", address(Currency.unwrap(_feeCurrency)));
+
+        if (!_feeCurrency.isAddressZero()) return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
+
         poolManager.take({currency: _feeCurrency, to: address(this), amount: _feeAmount});
 
         BeforeSwapDelta _returnDelta = toBeforeSwapDelta({

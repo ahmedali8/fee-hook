@@ -148,8 +148,8 @@ contract OmniHookTest is Test, Fixtures {
             exactAmount: uint128(amountToSwap),
             hookData: ZERO_BYTES
         }));
-        console2.log("expectedAmountOut: ", expectedAmountOut);
-        console2.log("/// quoter ///");
+        
+        assertEq(expectedAmountOut, 987060292978120240, "amount out");
 
         vm.prank(user);
         swapRouter.swap{value: amountToSwap}(key, params, _defaultTestSettings(), ZERO_BYTES);
@@ -171,6 +171,78 @@ contract OmniHookTest is Test, Fixtures {
         assertEq(userBalanceAfter0, userBalanceBefore0 - amountToSwap, "amount 0");
         assertEq(userBalanceAfter1, userBalanceBefore1 + expectedAmountOut, "amount 1");
         assertEq(hookBalanceAfter0, hookBalanceBefore0 + expectedFeeAmount, "amount 0");
+    }
+
+    function test_OmniHook_OneForZero_ExactInput_BeforeSwap() public {
+        _setApprovalsFor(user, address(Currency.unwrap(key.currency1)));
+
+        // Seeds liquidity into the user.
+        key.currency0.transfer(address(user), 10e18);
+        key.currency1.transfer(address(user), 10e18);
+
+        uint256 userBalanceBefore0 = key.currency0.balanceOf(address(user));
+        uint256 userBalanceBefore1 = key.currency1.balanceOf(address(user));
+
+        uint256 hookBalanceBefore0 = key.currency0.balanceOf(address(hook));
+        uint256 hookBalanceBefore1 = key.currency1.balanceOf(address(hook));
+
+        uint256 amountToSwap = 1e18; // 1 token
+
+        // Setting this value to true means currency0 is supplied.
+        // Setting this value to false means currency1 is supplied.
+        bool zeroForOne = false;
+
+        // Set the sign of this value.
+        // A negative amount means it is an exactInput swap, so the user is sending exactly that amount into the pool.
+        // A positive amount means it is an exactOutput swap, so the user is only requesting that amount out of the swap.
+        int256 amountSpecified = -int256(amountToSwap);
+
+        IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
+            zeroForOne: zeroForOne,
+            amountSpecified: amountSpecified,
+            // Note: if zeroForOne is true, the price is pushed down, otherwise its pushed up.
+            sqrtPriceLimitX96: zeroForOne ? MIN_PRICE_LIMIT : MAX_PRICE_LIMIT
+        });
+
+        _printTestType(params.zeroForOne, params.amountSpecified);
+
+        console2.log("--- STARTING BALANCES ---");
+
+        console2.log("User balance in currency0 before swapping: ", userBalanceBefore0);
+        console2.log("User balance in currency1 before swapping: ", userBalanceBefore1);
+        console2.log("Hook balance in currency0 before swapping: ", hookBalanceBefore0);
+        console2.log("Hook balance in currency1 before swapping: ", hookBalanceBefore1);
+
+        console2.log("/// quoter ///");
+        (uint256 expectedAmountOut,) = quoter.quoteExactInputSingle(IV4Quoter.QuoteExactSingleParams({
+            poolKey: key,
+            zeroForOne: zeroForOne,
+            exactAmount: uint128(amountToSwap),
+            hookData: ZERO_BYTES
+        }));
+        console2.log("expectedAmountOut: ", expectedAmountOut);
+        console2.log("/// quoter ///");
+
+        // vm.prank(user);
+        // swapRouter.swap{value: amountToSwap}(key, params, _defaultTestSettings(), ZERO_BYTES);
+    
+        // uint256 userBalanceAfter0 = key.currency0.balanceOf(address(user));
+        // uint256 userBalanceAfter1 = key.currency1.balanceOf(address(user));
+
+        // uint256 hookBalanceAfter0 = key.currency0.balanceOf(address(hook));
+
+        // console2.log("--- ENDING BALANCES ---");
+
+        // console2.log("User balance in currency0 after  swapping: ", userBalanceAfter0);
+        // console2.log("User balance in currency1 after  swapping: ", userBalanceAfter1);
+        // console2.log("Hook balance in currency0 after  swapping: ", hookBalanceAfter0);
+
+        // // 0.01% for 1 eth = 0.0001 eth
+        // uint256 expectedFeeAmount = (amountToSwap * hook.HOOK_FEE_PERCENTAGE()) / hook.FEE_DENOMINATOR(); 
+
+        // assertEq(userBalanceAfter0, userBalanceBefore0 - amountToSwap, "amount 0");
+        // assertEq(userBalanceAfter1, userBalanceBefore1 + expectedAmountOut, "amount 1");
+        // assertEq(hookBalanceAfter0, hookBalanceBefore0 + expectedFeeAmount, "amount 0");
     }
 
     /// INTERNAL HELPER FUNCTIONS ///
