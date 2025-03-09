@@ -10,17 +10,33 @@ import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/src/types/BalanceDelta.sol";
 import {SafeCast} from "v4-core/src/libraries/SafeCast.sol";
+import {FeeLibrary} from "./libraries/FeeLibrary.sol";
 
 import "forge-std/console2.sol";
 
 contract OmniHook is BaseHook, Ownable {
+    using FeeLibrary for uint256;
+    using FeeLibrary for uint24;
     using BalanceDeltaLibrary for BalanceDelta;
     using SafeCast for *;
+
+    // 100 -> 0.01%
+    uint24 public feeBips = 100;
+
+    // the fee is represented in hundredths of a bip, so the max is 100%
+    uint256 public constant MAX_FEE = 100_000;
 
     uint256 public constant HOOK_FEE_PERCENTAGE = 10; // 0.01% fee
     uint256 public constant FEE_DENOMINATOR = 100000;
 
     constructor(IPoolManager _poolManager, address _initialOwner) BaseHook(_poolManager) Ownable(_initialOwner) {}
+
+    /// @notice Calculates the fee amount without rounding up
+    /// @param amount The transaction amount
+    /// @return feeAmount The calculated fee amount
+    function calculateFee(uint256 amount) public view returns (uint256) {
+        return amount.computeFee(feeBips);
+    }
 
     function _beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
         internal
@@ -53,7 +69,8 @@ contract OmniHook is BaseHook, Ownable {
             // taking fee on input token (eth) i.e. when user is buying tokens
             Currency _feeCurrency = key.currency0;
 
-            uint256 _feeAmount = (_amount * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            // uint256 _feeAmount = (_amount * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            uint256 _feeAmount = calculateFee(_amount);
             console2.log("feeAmount: ", _feeAmount);
 
             console2.log("swapExactETHForTokens - taking fee");
@@ -76,7 +93,8 @@ contract OmniHook is BaseHook, Ownable {
 
             Currency _feeCurrency = key.currency0;
 
-            uint256 _feeAmount = (_amount * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            // uint256 _feeAmount = (_amount * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            uint256 _feeAmount = calculateFee(_amount);
             console2.log("feeAmount: ", _feeAmount);
 
             console2.log("swapTokensForExactETH - taking fee");
@@ -154,7 +172,8 @@ contract OmniHook is BaseHook, Ownable {
             console2.log("amount0: ", delta.amount0());
             console2.log("amount1: ", delta.amount1());
 
-            uint256 _feeAmount = (uint256(uint128(-delta.amount0())) * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            // uint256 _feeAmount = (uint256(uint128(-delta.amount0())) * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            uint256 _feeAmount = calculateFee(uint256(uint128(-delta.amount0())));
             console2.log("feeAmount: ", _feeAmount);
 
             console2.log("swapETHForExactTokens - taking fee");
@@ -172,7 +191,11 @@ contract OmniHook is BaseHook, Ownable {
 
             Currency _feeCurrency = key.currency0;
 
-            uint256 _feeAmount = (uint256(uint128(-delta.amount0())) * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            console2.log("amount0: ", delta.amount0());
+            console2.log("amount1: ", delta.amount1());
+
+            // uint256 _feeAmount = (uint256(uint128(-delta.amount0())) * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            uint256 _feeAmount = calculateFee(uint256(uint128(delta.amount0())));
             console2.log("feeAmount: ", _feeAmount);
 
             console2.log("swapExactTokensForETH - taking fee");
