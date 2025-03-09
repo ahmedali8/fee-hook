@@ -336,6 +336,86 @@ contract OmniHookTest is Test, Fixtures {
         assertEq(hookBalanceAfter1, hookBalanceBefore1, "hook amount 1");
     }
 
+    function test_OmniHook_OneForZero_ExactOutput() public {
+        _setApprovalsFor(user, address(Currency.unwrap(key.currency1)));
+
+        // Seeds liquidity into the user.
+        key.currency0.transfer(address(user), 10e18);
+        key.currency1.transfer(address(user), 10e18);
+
+        uint256 userBalanceBefore0 = key.currency0.balanceOf(address(user));
+        uint256 userBalanceBefore1 = key.currency1.balanceOf(address(user));
+
+        uint256 hookBalanceBefore0 = key.currency0.balanceOf(address(hook));
+        uint256 hookBalanceBefore1 = key.currency1.balanceOf(address(hook));
+
+        uint256 amountToSwap = 1 ether; // 1 eth out (amount0)
+
+        // Setting this value to true means currency0 is supplied.
+        // Setting this value to false means currency1 is supplied.
+        bool zeroForOne = false;
+
+        // Set the sign of this value.
+        // A negative amount means it is an exactInput swap, so the user is sending exactly that amount into the pool.
+        // A positive amount means it is an exactOutput swap, so the user is only requesting that amount out of the swap.
+        int256 amountSpecified = int256(amountToSwap);
+
+        IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
+            zeroForOne: zeroForOne,
+            amountSpecified: amountSpecified,
+            // Note: if zeroForOne is true, the price is pushed down, otherwise its pushed up.
+            sqrtPriceLimitX96: zeroForOne ? MIN_PRICE_LIMIT : MAX_PRICE_LIMIT
+        });
+
+        _printTestType(params.zeroForOne, params.amountSpecified);
+
+        console2.log("--- STARTING BALANCES ---");
+
+        console2.log("User balance in currency0 before swapping: ", userBalanceBefore0);
+        console2.log("User balance in currency1 before swapping: ", userBalanceBefore1);
+        console2.log("Hook balance in currency0 before swapping: ", hookBalanceBefore0);
+        console2.log("Hook balance in currency1 before swapping: ", hookBalanceBefore1);
+
+        console2.log("-- quoter --");
+        (uint256 expectedAmountIn,) = quoter.quoteExactOutputSingle(
+            IV4Quoter.QuoteExactSingleParams({
+                poolKey: key,
+                zeroForOne: zeroForOne,
+                exactAmount: uint128(amountToSwap),
+                hookData: ZERO_BYTES
+            })
+        );
+        // expectedAmountIn is the token amount
+        console2.log("expectedAmountIn: ", expectedAmountIn);
+        console2.log("-- quoter --");
+
+        assertEq(expectedAmountIn, 1013242768915879568, "amount in");
+
+        vm.prank(user);
+        swapRouter.swap(key, params, _defaultTestSettings(), ZERO_BYTES);
+
+        uint256 userBalanceAfter0 = key.currency0.balanceOf(address(user));
+        uint256 userBalanceAfter1 = key.currency1.balanceOf(address(user));
+
+        uint256 hookBalanceAfter0 = key.currency0.balanceOf(address(hook));
+        uint256 hookBalanceAfter1 = key.currency1.balanceOf(address(hook));
+
+        console2.log("--- ENDING BALANCES ---");
+
+        console2.log("User balance in currency0 after  swapping: ", userBalanceAfter0);
+        console2.log("User balance in currency1 after  swapping: ", userBalanceAfter1);
+        console2.log("Hook balance in currency0 after  swapping: ", hookBalanceAfter0);
+        console2.log("Hook balance in currency1 after  swapping: ", hookBalanceAfter1);
+
+        // uint256 feeAmount = 100000000000000; // 0.01% of 1 eth
+
+        assertEq(userBalanceAfter1, userBalanceBefore1 - expectedAmountIn, "user amount 1");
+        assertEq(userBalanceAfter0, userBalanceBefore0 + amountToSwap, "user amount 0");
+
+        assertEq(hookBalanceAfter0, hookBalanceBefore0 + 100000000000000, "hook amount 0");
+        assertEq(hookBalanceAfter1, hookBalanceBefore1, "hook amount 1");
+    }
+
     /// INTERNAL HELPER FUNCTIONS ///
 
     function _printTestType(bool zeroForOne, int256 amountSpecified) internal pure {
