@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import "forge-std/console2.sol";
 import {FullMath} from "v4-core/src/libraries/FullMath.sol";
 
 /// @title FeeLibrary - Computes dynamic fees using bips (basis points)
@@ -34,8 +33,6 @@ library FeeLibrary {
     /// @return feeAmount The calculated fee amount
     function computeFee(uint256 amount, uint24 feeBips) internal pure returns (uint256 feeAmount) {
         feeBips.validate();
-        console2.log("amount: ", amount);
-        console2.log("feeBips: ", feeBips);
         feeAmount = FullMath.mulDiv(amount, uint256(feeBips), uint256(MAX_FEE_BIPS));
     }
 }

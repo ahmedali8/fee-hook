@@ -39,6 +39,9 @@ contract OmniHookTest is Test, Fixtures {
     using CurrencyLibrary for Currency;
     using StateLibrary for IPoolManager;
 
+    uint256 public constant HOOK_FEE_PERCENTAGE = 10;
+    uint256 public constant FEE_DENOMINATOR = 100_000;
+
     address user = address(0xBEEF);
 
     IV4Quoter quoter;
@@ -66,7 +69,7 @@ contract OmniHookTest is Test, Fixtures {
                     | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
             ) ^ (0x4444 << 144) // Namespace the hook to avoid collisions
         );
-        bytes memory constructorArgs = abi.encode(manager, msg.sender); // Add all the necessary constructor arguments from the hook
+        bytes memory constructorArgs = abi.encode(manager, msg.sender, 100); // Add all the necessary constructor arguments from the hook
         deployCodeTo("OmniHook.sol:OmniHook", constructorArgs, flags);
         hook = OmniHook(payable(flags));
         vm.label(flags, "OmniHook");
@@ -170,7 +173,7 @@ contract OmniHookTest is Test, Fixtures {
         console2.log("Hook balance in currency0 after  swapping: ", hookBalanceAfter0);
 
         // 0.01% for 1 eth = 0.0001 eth
-        uint256 expectedFeeAmount = (amountToSwap * hook.HOOK_FEE_PERCENTAGE()) / hook.FEE_DENOMINATOR();
+        uint256 expectedFeeAmount = (amountToSwap * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
 
         assertEq(userBalanceAfter0, userBalanceBefore0 - amountToSwap, "amount 0");
         // assertEq(userBalanceAfter1, userBalanceBefore1 + expectedAmountOut, "amount 1");
@@ -453,10 +456,9 @@ contract OmniHookTest is Test, Fixtures {
     }
 }
 
+// feat: handle all for cases
 
-// feat: handle all for cases 
-
-// buy: 
+// buy:
 // swapExactETHForTokens - zeroForOne - exactInput - beforeSwap
 // swapETHForExactTokens - zeroForOne - exactOutput - afterSwap
 
