@@ -27,58 +27,188 @@ contract OmniHook is BaseHook, Ownable {
         override
         returns (bytes4, BeforeSwapDelta, uint24)
     {
-        uint256 _swapAmount =
-            params.amountSpecified < 0 ? uint256(-params.amountSpecified) : uint256(params.amountSpecified);
-        uint256 _feeAmount = (_swapAmount * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+        console2.log("/// Before Swap Start ///");
 
-        Currency _feeCurrency = params.zeroForOne ? key.currency0 : key.currency1;
-        console2.log("feeCurrency: ", address(Currency.unwrap(_feeCurrency)));
+        // in this case the amount is actually the eth amount
+        (Currency _inputCurrency, Currency _outputCurrency, uint256 _amount) = _getInputOutputAndAmount(key, params);
 
-        if (!_feeCurrency.isAddressZero()) return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
-
-        console2.log("taking fee");
-
-        poolManager.take({currency: _feeCurrency, to: address(this), amount: _feeAmount});
-
-        BeforeSwapDelta _returnDelta = toBeforeSwapDelta({
-            deltaSpecified: int128(int256(_feeAmount)), // Specified delta (fee amount)
-            deltaUnspecified: 0 // Unspecified delta (no change)
-        });
-
-        return (BaseHook.beforeSwap.selector, _returnDelta, 0);
-    }
-
-    function _afterSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata params, BalanceDelta delta, bytes calldata)
-        internal
-        override
-        returns (bytes4, int128)
-    {
-        console2.log("// After Swap //");
+        console2.log("// -- //");
+        console2.log("inputCurrency: ", address(Currency.unwrap(_inputCurrency)));
+        console2.log("outputCurrency: ", address(Currency.unwrap(_outputCurrency)));
+        console2.log("amount: ", _amount);
+        console2.log("// -- //");
 
         bool exactInput = params.amountSpecified < 0;
         console2.log("exactInput: ", exactInput);
         bool specifiedIsZero = params.zeroForOne == exactInput;
         console2.log("specifiedIsZero: ", specifiedIsZero);
 
-        if (specifiedIsZero) {
-            return (BaseHook.afterSwap.selector, 0);
+        // we wanna take fee in specified token and it must be eth
+
+        // swapExactETHForTokens
+        // If exactInput and zeroForOne -> take eth fee
+        if (exactInput && params.zeroForOne) {
+            // specified token is input token (eth)
+
+            // taking fee on input token (eth) i.e. when user is buying tokens
+            Currency _feeCurrency = key.currency0;
+
+            uint256 _feeAmount = (_amount * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            console2.log("feeAmount: ", _feeAmount);
+
+            console2.log("swapExactETHForTokens - taking fee");
+
+            poolManager.take({currency: _feeCurrency, to: address(this), amount: _feeAmount});
+
+            BeforeSwapDelta _returnDelta = toBeforeSwapDelta({
+                deltaSpecified: int128(int256(_feeAmount)), // Specified delta (fee amount)
+                deltaUnspecified: 0 // Unspecified delta (no change)
+            });
+
+            console2.log("/// Before Swap End ///");
+            return (BaseHook.beforeSwap.selector, _returnDelta, 0);
         }
 
-        // taking hook fee on unspecified token (output token) i.e. when user is selling tokens and getting eth in return
-        // uint256 _feeAmount = (uint256(delta.amount0) * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+        // swapTokensForExactETH
+        // If exactOutput and oneForZero -> take eth fee
+        if (!exactInput && !params.zeroForOne) {
+            // specified token is output token (eth)
 
-        int128 amount0 = delta.amount0();
-        console2.log("amount0: ", amount0);
-        int128 amount1 = delta.amount1();
-        console2.log("amount1: ", amount1);
+            Currency _feeCurrency = key.currency0;
 
-        // we will calculate fee on amount0
-        uint256 _feeAmount = (uint256(amount0.toUint128()) * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
-        console2.log("feeAmount: ", _feeAmount);
+            uint256 _feeAmount = (_amount * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            console2.log("feeAmount: ", _feeAmount);
 
-        poolManager.take({currency: key.currency0, to: address(this), amount: _feeAmount});
+            console2.log("swapTokensForExactETH - taking fee");
 
-        return (BaseHook.afterSwap.selector, _feeAmount.toInt128());
+            poolManager.take({currency: _feeCurrency, to: address(this), amount: _feeAmount});
+
+            BeforeSwapDelta _returnDelta = toBeforeSwapDelta({
+                deltaSpecified: int128(int256(_feeAmount)), // Specified delta (fee amount)
+                deltaUnspecified: 0 // Unspecified delta (no change)
+            });
+
+            console2.log("/// Before Swap End ///");
+            return (BaseHook.beforeSwap.selector, _returnDelta, 0);
+        }
+
+        // uint256 _swapAmount =
+        //     exactInput ? uint256(-params.amountSpecified) : uint256(params.amountSpecified);
+        // uint256 _feeAmount = (_swapAmount * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+
+        // Currency _feeCurrency = params.zeroForOne ? key.currency0 : key.currency1;
+        // console2.log("feeCurrency: ", address(Currency.unwrap(_feeCurrency)));
+
+        // if (!_feeCurrency.isAddressZero()) {
+        //     console2.log("/// Before Swap End ///");
+        //     return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
+        // }
+
+        // console2.log("taking fee");
+
+        // poolManager.take({currency: _feeCurrency, to: address(this), amount: _feeAmount});
+
+        // BeforeSwapDelta _returnDelta = toBeforeSwapDelta({
+        //     deltaSpecified: int128(int256(_feeAmount)), // Specified delta (fee amount)
+        //     deltaUnspecified: 0 // Unspecified delta (no change)
+        // });
+
+        // console2.log("/// Before Swap End ///");
+        // return (BaseHook.beforeSwap.selector, _returnDelta, 0);
+
+        // base case -> no fee
+        console2.log("beforeSwap - no fee");
+        return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
+    }
+
+    function _afterSwap(
+        address,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        BalanceDelta delta,
+        bytes calldata
+    ) internal override returns (bytes4, int128) {
+        console2.log("/// After Swap Start ///");
+
+        // in this case the amount is actually the token amount
+        (Currency _inputCurrency, Currency _outputCurrency, uint256 _amount) = _getInputOutputAndAmount(key, params);
+
+        console2.log("// -- //");
+        console2.log("inputCurrency: ", address(Currency.unwrap(_inputCurrency)));
+        console2.log("outputCurrency: ", address(Currency.unwrap(_outputCurrency)));
+        console2.log("amount: ", _amount);
+        console2.log("// -- //");
+
+        bool exactInput = params.amountSpecified < 0;
+        console2.log("exactInput: ", exactInput);
+        bool specifiedIsZero = params.zeroForOne == exactInput;
+        console2.log("specifiedIsZero: ", specifiedIsZero);
+
+        // swapETHForExactTokens
+        // If exactOutput and zeroForOne -> take eth fee
+        if (!exactInput && params.zeroForOne) {
+            // unspecified token is input token (eth)
+
+            Currency _feeCurrency = key.currency0;
+
+            console2.log("amount0: ", delta.amount0());
+            console2.log("amount1: ", delta.amount1());
+
+            uint256 _feeAmount = (uint256(uint128(-delta.amount0())) * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            console2.log("feeAmount: ", _feeAmount);
+
+            console2.log("swapETHForExactTokens - taking fee");
+
+            poolManager.take({currency: _feeCurrency, to: address(this), amount: _feeAmount});
+
+            console2.log("/// After Swap End ///");
+            return (BaseHook.afterSwap.selector, _feeAmount.toInt128());
+        }
+
+        // swapExactTokensForETH
+        // If exactInput and oneForZero -> take eth fee
+        if (exactInput && !params.zeroForOne) {
+            // unspecified token is output token (eth)
+
+            Currency _feeCurrency = key.currency0;
+
+            uint256 _feeAmount = (uint256(uint128(-delta.amount0())) * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+            console2.log("feeAmount: ", _feeAmount);
+
+            console2.log("swapExactTokensForETH - taking fee");
+
+            poolManager.take({currency: _feeCurrency, to: address(this), amount: _feeAmount});
+
+            console2.log("/// After Swap End ///");
+            return (BaseHook.afterSwap.selector, _feeAmount.toInt128());
+        }
+
+        // base case -> no fee
+        console2.log("afterSwap - no fee");
+        console2.log("/// After Swap End ///");
+        return (BaseHook.afterSwap.selector, 0);
+
+        // if (specifiedIsZero) {
+        //     console2.log("/// After Swap End ///");
+        //     return (BaseHook.afterSwap.selector, 0);
+        // }
+
+        // // taking hook fee on unspecified token (output token) i.e. when user is selling tokens and getting eth in return
+        // // uint256 _feeAmount = (uint256(delta.amount0) * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+
+        // int128 amount0 = delta.amount0();
+        // console2.log("amount0: ", amount0);
+        // int128 amount1 = delta.amount1();
+        // console2.log("amount1: ", amount1);
+
+        // // we will calculate fee on amount0
+        // uint256 _feeAmount = (uint256(amount0.toUint128()) * HOOK_FEE_PERCENTAGE) / FEE_DENOMINATOR;
+        // console2.log("feeAmount: ", _feeAmount);
+
+        // poolManager.take({currency: key.currency0, to: address(this), amount: _feeAmount});
+
+        // console2.log("/// After Swap End ///");
+        // return (BaseHook.afterSwap.selector, _feeAmount.toInt128());
     }
 
     // To receive ETH
@@ -101,5 +231,15 @@ contract OmniHook is BaseHook, Ownable {
             afterAddLiquidityReturnDelta: false,
             afterRemoveLiquidityReturnDelta: false
         });
+    }
+
+    function _getInputOutputAndAmount(PoolKey calldata key, IPoolManager.SwapParams calldata params)
+        internal
+        pure
+        returns (Currency input, Currency output, uint256 amount)
+    {
+        (input, output) = params.zeroForOne ? (key.currency0, key.currency1) : (key.currency1, key.currency0);
+
+        amount = params.amountSpecified < 0 ? uint256(-params.amountSpecified) : uint256(params.amountSpecified);
     }
 }
