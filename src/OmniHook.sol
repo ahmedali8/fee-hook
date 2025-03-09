@@ -1,31 +1,40 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-// v4-core
+// TYPES
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {BeforeSwapDelta, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/src/types/BalanceDelta.sol";
+import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
+
+// LIBRARIES
 import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {SafeCast} from "v4-core/src/libraries/SafeCast.sol";
+import {FeeLibrary} from "./libraries/FeeLibrary.sol";
+
+// INTERFACES
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 
-// v4-periphery
+// ABSTRACT CONTRACTS
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
-
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {FeeLibrary} from "./libraries/FeeLibrary.sol";
 
 contract OmniHook is BaseHook, Ownable {
     using FeeLibrary for uint256;
     using FeeLibrary for uint24;
     using BalanceDeltaLibrary for BalanceDelta;
+    using PoolIdLibrary for PoolKey;
     using SafeCast for *;
+
+    error FeeUnchanged();
 
     // 100 -> 0.01%
     uint24 public feeBips;
 
-    event FeeUpdated(uint24 newFeeBips);
+    event FeeUpdated(uint24 oldFeeBips, uint24 newFeeBips);
+
+    event HookFee(PoolId indexed id, address indexed sender, uint128 feeAmount0, uint128 feeAmount1);
 
     constructor(IPoolManager _poolManager, address _initialOwner, uint24 _initialFeeBips)
         BaseHook(_poolManager)
@@ -39,11 +48,13 @@ contract OmniHook is BaseHook, Ownable {
     receive() external payable {}
 
     /// @notice Updates the fee in bips
-    /// @param _newFeeBips New fee in hundredths of a bip
-    function setFee(uint24 _newFeeBips) external onlyOwner {
-        _newFeeBips.validate();
-        feeBips = _newFeeBips;
-        emit FeeUpdated(_newFeeBips);
+    /// @param newFeeBips New fee in hundredths of a bip
+    function setFee(uint24 newFeeBips) external onlyOwner {
+        newFeeBips.validate();
+        uint24 _oldFeeBips = feeBips;
+        if (newFeeBips == _oldFeeBips) revert FeeUnchanged();
+        feeBips = newFeeBips;
+        emit FeeUpdated(_oldFeeBips, newFeeBips);
     }
 
     function _beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
@@ -53,33 +64,40 @@ contract OmniHook is BaseHook, Ownable {
     {
         bool _exactInput = params.amountSpecified < 0;
         uint256 _amount = _exactInput ? uint256(-params.amountSpecified) : uint256(params.amountSpecified);
+        BeforeSwapDelta delta = toBeforeSwapDelta(0, 0); // default no fee
 
         if (
             // swapExactETHForTokens
             // If exactInput and zeroForOne -> take eth fee
             // specified token is input token (eth)
+            // (_exactInput && params.zeroForOne)
             // OR
             // swapTokensForExactETH
             // If exactOutput and oneForZero -> take eth fee
             // specified token is output token (eth)
-            (_exactInput && params.zeroForOne) || (!_exactInput && !params.zeroForOne)
+            // (!_exactInput && !params.zeroForOne)
+            //
+            // specifiedIsZero
+            _exactInput == params.zeroForOne
         ) {
-            Currency _feeCurrency = key.currency0;
+            uint256 _feeAmount;
+            unchecked {
+                _feeAmount = _amount.computeFee(feeBips);
+            }
 
-            uint256 _feeAmount = calculateFee(_amount);
+            if (_feeAmount == 0) return (BaseHook.beforeSwap.selector, delta, 0);
 
-            poolManager.take({currency: _feeCurrency, to: address(this), amount: _feeAmount});
+            poolManager.take({currency: key.currency0, to: address(this), amount: _feeAmount});
 
-            BeforeSwapDelta _returnDelta = toBeforeSwapDelta({
+            emit HookFee(key.toId(), msg.sender, uint128(_feeAmount), 0);
+
+            delta = toBeforeSwapDelta({
                 deltaSpecified: int128(int256(_feeAmount)), // Specified delta (fee amount)
                 deltaUnspecified: 0 // Unspecified delta (no change)
             });
-
-            return (BaseHook.beforeSwap.selector, _returnDelta, 0);
         }
 
-        // base case -> no fee
-        return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
+        return (BaseHook.beforeSwap.selector, delta, 0);
     }
 
     function _afterSwap(
@@ -94,31 +112,40 @@ contract OmniHook is BaseHook, Ownable {
         // no fee by default
         uint256 _feeAmount = 0;
 
+        // we wanna take fee in unspecified token i.e. eth
+        // if (!_exactInput && params.zeroForOne)
         // swapETHForExactTokens
         // If exactOutput and zeroForOne -> take eth fee
         // unspecified token is input token (eth)
-        if (!_exactInput && params.zeroForOne) {
-            _feeAmount = calculateFee(uint256(uint128(-delta.amount0())));
-        }
-
+        // uint128(-delta.amount0())
+        //
+        // if (_exactInput && !params.zeroForOne)
         // swapExactTokensForETH
         // If exactInput and oneForZero -> take eth fee
         // unspecified token is output token (eth)
-        if (_exactInput && !params.zeroForOne) {
-            _feeAmount = calculateFee(uint256(uint128(delta.amount0())));
-        }
+        // uint128(delta.amount0())
+        if (_exactInput != params.zeroForOne) {
+            unchecked {
+                _feeAmount = uint256(uint128(params.zeroForOne ? -delta.amount0() : delta.amount0())).computeFee(feeBips);
+            }
 
-        Currency _feeCurrency = key.currency0;
-        poolManager.take({currency: _feeCurrency, to: address(this), amount: _feeAmount});
+            if (_feeAmount == 0) return (BaseHook.afterSwap.selector, _feeAmount.toInt128());
+
+            poolManager.take({currency: key.currency0, to: address(this), amount: _feeAmount});
+        
+            emit HookFee(key.toId(), msg.sender, uint128(_feeAmount), 0);
+        }
 
         return (BaseHook.afterSwap.selector, _feeAmount.toInt128());
     }
 
     /// @notice Calculates the fee amount without rounding up
     /// @param amount The transaction amount
-    /// @return feeAmount The calculated fee amount
-    function calculateFee(uint256 amount) public view returns (uint256) {
-        return amount.computeFee(feeBips);
+    /// @return fee The calculated fee amount
+    function calculateFee(uint256 amount) external view returns (uint256 fee) {
+        unchecked {
+            fee = amount.computeFee(feeBips);
+        }
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
