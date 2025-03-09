@@ -94,28 +94,27 @@ contract OmniHook is BaseHook, Ownable {
         returns (bytes4, BeforeSwapDelta, uint24)
     {
         bool _exactInput = params.amountSpecified < 0;
-        uint256 _amount = _exactInput ? uint256(-params.amountSpecified) : uint256(params.amountSpecified);
-        BeforeSwapDelta delta = toBeforeSwapDelta(0, 0); // default no fee
 
-        if (_exactInput == params.zeroForOne) {
-            uint256 _feeAmount;
-            unchecked {
-                _feeAmount = _amount.computeFee(feeBips);
-            }
+        if (_exactInput != params.zeroForOne) return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
 
-            if (_feeAmount == 0) return (BaseHook.beforeSwap.selector, delta, 0);
-
-            poolManager.take({currency: key.currency0, to: address(this), amount: _feeAmount});
-
-            emit HookFee(key.toId(), msg.sender, uint128(_feeAmount), 0);
-
-            delta = toBeforeSwapDelta({
-                deltaSpecified: int128(int256(_feeAmount)), // Specified delta (fee amount)
-                deltaUnspecified: 0 // Unspecified delta (no change)
-            });
+        uint256 _feeAmount;
+        unchecked {
+            _feeAmount = uint256(_exactInput ? -params.amountSpecified : params.amountSpecified).computeFee(feeBips);
         }
 
-        return (BaseHook.beforeSwap.selector, delta, 0);
+        if (_feeAmount == 0) return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
+
+        poolManager.take({currency: key.currency0, to: address(this), amount: _feeAmount});
+        emit HookFee(key.toId(), msg.sender, uint128(_feeAmount), 0);
+
+        return (
+            BaseHook.beforeSwap.selector,
+            toBeforeSwapDelta({
+                deltaSpecified: int128(int256(_feeAmount)), // Specified delta (fee amount)
+                deltaUnspecified: 0 // Unspecified delta (no change)
+            }),
+            0
+        );
     }
 
     /// @notice Hook executed after a swap to deduct fees when applicable.
@@ -142,21 +141,17 @@ contract OmniHook is BaseHook, Ownable {
     ) internal override returns (bytes4, int128) {
         bool _exactInput = params.amountSpecified < 0;
 
-        // no fee by default
-        uint256 _feeAmount = 0;
+        if (_exactInput == params.zeroForOne) return (BaseHook.afterSwap.selector, 0);
 
-        if (_exactInput != params.zeroForOne) {
-            unchecked {
-                _feeAmount =
-                    uint256(uint128(params.zeroForOne ? -delta.amount0() : delta.amount0())).computeFee(feeBips);
-            }
-
-            if (_feeAmount == 0) return (BaseHook.afterSwap.selector, _feeAmount.toInt128());
-
-            poolManager.take({currency: key.currency0, to: address(this), amount: _feeAmount});
-
-            emit HookFee(key.toId(), msg.sender, uint128(_feeAmount), 0);
+        uint256 _feeAmount;
+        unchecked {
+            _feeAmount = uint256(uint128(params.zeroForOne ? -delta.amount0() : delta.amount0())).computeFee(feeBips);
         }
+
+        if (_feeAmount == 0) return (BaseHook.afterSwap.selector, 0);
+
+        poolManager.take({currency: key.currency0, to: address(this), amount: _feeAmount});
+        emit HookFee(key.toId(), msg.sender, uint128(_feeAmount), 0);
 
         return (BaseHook.afterSwap.selector, _feeAmount.toInt128());
     }
