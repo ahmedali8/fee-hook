@@ -20,10 +20,10 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @title OmniHook
+/// @title TaxHook
 /// @notice A Uniswap v4 hook contract that implements fee collection logic before and after swaps.
 /// @dev This contract applies dynamic fees based on swap direction and token flows.
-contract OmniHook is BaseHook, Ownable {
+contract TaxHook is BaseHook, Ownable {
     using FeeLibrary for uint256;
     using FeeLibrary for uint24;
     using BalanceDeltaLibrary for BalanceDelta;

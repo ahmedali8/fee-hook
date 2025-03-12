@@ -7,13 +7,13 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
 import {Constants} from "../base/Constants.sol";
 
-import {OmniHook} from "src/OmniHook.sol";
+import {TaxHook} from "src/TaxHook.sol";
 
-/// @notice Mines the address and deploys the OmniHook.sol Hook contract
-contract DeployOmniHook is Script, Constants {
+/// @notice Mines the address and deploys the TaxHook.sol Hook contract
+contract DeployTaxHook is Script, Constants {
     function setUp() public {}
 
-    function deployOmniHook(address initialOwner, uint24 initialBips) internal returns (OmniHook omniHook) {
+    function deployTaxHook(address initialOwner, uint24 initialBips) internal returns (TaxHook taxHook) {
         // hook contracts must have specific flags encoded in the address
         uint160 flags = uint160(
             Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_FLAG
@@ -23,11 +23,11 @@ contract DeployOmniHook is Script, Constants {
         // Mine a salt that will produce a hook address with the correct flags
         bytes memory constructorArgs = abi.encode(POOLMANAGER, initialOwner, initialBips);
         (address hookAddress, bytes32 salt) =
-            HookMiner.find(CREATE2_DEPLOYER, flags, type(OmniHook).creationCode, constructorArgs);
+            HookMiner.find(CREATE2_DEPLOYER, flags, type(TaxHook).creationCode, constructorArgs);
 
-        omniHook = new OmniHook{salt: salt}(IPoolManager(POOLMANAGER), initialOwner, initialBips);
+        taxHook = new TaxHook{salt: salt}(IPoolManager(POOLMANAGER), initialOwner, initialBips);
 
-        require(address(omniHook) == hookAddress, "CounterScript: hook address mismatch");
+        require(address(taxHook) == hookAddress, "CounterScript: hook address mismatch");
     }
 
     function run() public {
@@ -36,10 +36,10 @@ contract DeployOmniHook is Script, Constants {
         // Deploy the hook using CREATE2
         vm.startBroadcast();
         console2.log("caller: ", msg.sender);
-        OmniHook omniHook = deployOmniHook(msg.sender, initialBips);
+        TaxHook taxHook = deployTaxHook(msg.sender, initialBips);
         vm.stopBroadcast();
 
         // Log the omni hook address
-        console2.log("OmniHook deployed at:", address(omniHook));
+        console2.log("TaxHook deployed at:", address(taxHook));
     }
 }

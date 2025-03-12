@@ -29,11 +29,11 @@ import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {EasyPosm} from "./utils/EasyPosm.sol";
 import {Fixtures} from "./utils/Fixtures.sol";
 
-import {OmniHook} from "src/OmniHook.sol";
+import {TaxHook} from "src/TaxHook.sol";
 
 import "forge-std/console2.sol";
 
-contract OmniHookTest is Test, Fixtures {
+contract TaxHookTest is Test, Fixtures {
     using EasyPosm for IPositionManager;
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
@@ -46,7 +46,7 @@ contract OmniHookTest is Test, Fixtures {
 
     IV4Quoter quoter;
 
-    OmniHook hook;
+    TaxHook hook;
     PoolId poolId;
 
     uint256 tokenId;
@@ -70,9 +70,9 @@ contract OmniHookTest is Test, Fixtures {
             ) ^ (0x4444 << 144) // Namespace the hook to avoid collisions
         );
         bytes memory constructorArgs = abi.encode(manager, msg.sender, 100); // Add all the necessary constructor arguments from the hook
-        deployCodeTo("OmniHook.sol:OmniHook", constructorArgs, flags);
-        hook = OmniHook(payable(flags));
-        vm.label(flags, "OmniHook");
+        deployCodeTo("TaxHook.sol:TaxHook", constructorArgs, flags);
+        hook = TaxHook(payable(flags));
+        vm.label(flags, "TaxHook");
 
         // Create the pool
         key = PoolKey(CurrencyLibrary.ADDRESS_ZERO, currency1, 3000, 60, IHooks(hook));
@@ -105,11 +105,11 @@ contract OmniHookTest is Test, Fixtures {
         );
     }
 
-    function test_OmniHook_Owner() public view {
+    function test_TaxHook_Owner() public view {
         assertEq(hook.owner(), msg.sender, "owner");
     }
 
-    function test_OmniHook_ZeroForOne_ExactInput() public {
+    function test_TaxHook_ZeroForOne_ExactInput() public {
         _setApprovalsFor(user, address(Currency.unwrap(key.currency1)));
 
         // Seeds liquidity into the user.
@@ -180,7 +180,7 @@ contract OmniHookTest is Test, Fixtures {
         assertEq(hookBalanceAfter0, hookBalanceBefore0 + expectedFeeAmount, "amount 0");
     }
 
-    function test_OmniHook_ZeroForOne_ExactOutput() public {
+    function test_TaxHook_ZeroForOne_ExactOutput() public {
         _setApprovalsFor(user, address(Currency.unwrap(key.currency1)));
 
         // Seeds liquidity into the user.
@@ -260,7 +260,7 @@ contract OmniHookTest is Test, Fixtures {
         // assertEq(hookBalanceAfter0, hookBalanceBefore0 + expectedFeeAmount, "amount 0");
     }
 
-    function test_OmniHook_OneForZero_ExactInput() public {
+    function test_TaxHook_OneForZero_ExactInput() public {
         _setApprovalsFor(user, address(Currency.unwrap(key.currency1)));
 
         // Seeds liquidity into the user.
@@ -339,7 +339,7 @@ contract OmniHookTest is Test, Fixtures {
         assertEq(hookBalanceAfter1, hookBalanceBefore1, "hook amount 1");
     }
 
-    function test_OmniHook_OneForZero_ExactOutput() public {
+    function test_TaxHook_OneForZero_ExactOutput() public {
         _setApprovalsFor(user, address(Currency.unwrap(key.currency1)));
 
         // Seeds liquidity into the user.
