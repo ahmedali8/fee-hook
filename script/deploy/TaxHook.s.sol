@@ -13,7 +13,15 @@ import {TaxHook} from "src/TaxHook.sol";
 contract DeployTaxHook is Script, Constants {
     function setUp() public {}
 
-    function deployTaxHook(address initialOwner, uint24 initialBips) internal returns (TaxHook taxHook) {
+    function deployTaxHook(
+        address initialOwner,
+        uint24 initialBuyFeeBips,
+        uint24 initialSellFeeBips,
+        uint256 maxBuyAmount,
+        uint256 maxSellAmount,
+        uint256 maxWalletAmount,
+        uint32 cooldownBlocks
+    ) internal returns (TaxHook taxHook) {
         // hook contracts must have specific flags encoded in the address
         uint160 flags = uint160(
             Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_FLAG
@@ -21,22 +29,46 @@ contract DeployTaxHook is Script, Constants {
         );
 
         // Mine a salt that will produce a hook address with the correct flags
-        bytes memory constructorArgs = abi.encode(POOLMANAGER, initialOwner, initialBips);
+        bytes memory constructorArgs = abi.encode(
+            POOLMANAGER,
+            initialOwner,
+            initialBuyFeeBips,
+            initialSellFeeBips,
+            maxBuyAmount,
+            maxSellAmount,
+            maxWalletAmount,
+            cooldownBlocks
+        );
         (address hookAddress, bytes32 salt) =
             HookMiner.find(CREATE2_DEPLOYER, flags, type(TaxHook).creationCode, constructorArgs);
 
-        taxHook = new TaxHook{salt: salt}(IPoolManager(POOLMANAGER), initialOwner, initialBips);
+        taxHook = new TaxHook{salt: salt}(
+            IPoolManager(POOLMANAGER),
+            initialOwner,
+            initialBuyFeeBips,
+            initialSellFeeBips,
+            maxBuyAmount,
+            maxSellAmount,
+            maxWalletAmount,
+            cooldownBlocks
+        );
 
         require(address(taxHook) == hookAddress, "CounterScript: hook address mismatch");
     }
 
     function run() public {
-        uint24 initialBips = 10_000; // 1%
-
         // Deploy the hook using CREATE2
         vm.startBroadcast();
         console2.log("caller: ", msg.sender);
-        TaxHook taxHook = deployTaxHook(msg.sender, initialBips);
+        TaxHook taxHook = deployTaxHook({
+            initialOwner: msg.sender,
+            initialBuyFeeBips: 10_000, // 1%
+            initialSellFeeBips: 10_000, // 1%
+            maxBuyAmount: (100_000_000 ether * 10) / 1000, // 1% of 100M
+            maxSellAmount: (100_000_000 ether * 10) / 1000, // 1% of 100M
+            maxWalletAmount: (100_000_000 ether * 10) / 1000, // 1% of 100M
+            cooldownBlocks: 3
+        });
         vm.stopBroadcast();
 
         // Log the omni hook address

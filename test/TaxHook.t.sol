@@ -69,7 +69,16 @@ contract TaxHookTest is Test, Fixtures {
                     | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
             ) ^ (0x4444 << 144) // Namespace the hook to avoid collisions
         );
-        bytes memory constructorArgs = abi.encode(manager, msg.sender, 100); // Add all the necessary constructor arguments from the hook
+        bytes memory constructorArgs = abi.encode(
+            manager,
+            msg.sender, // initialOwner
+            100, // initialBuyFeeBips
+            100, // initialSellFeeBips
+            (100_000_000 ether * 10) / 1000, // maxBuyAmount
+            (100_000_000 ether * 10) / 1000, // maxSellAmount
+            (100_000_000 ether * 10) / 1000, // maxWalletAmount
+            3 // cooldownBlocks
+        );
         deployCodeTo("TaxHook.sol:TaxHook", constructorArgs, flags);
         hook = TaxHook(payable(flags));
         vm.label(flags, "TaxHook");
