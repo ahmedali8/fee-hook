@@ -44,10 +44,8 @@ contract TaxHook is BaseHook, Ownable {
     ///         STATE VARIABLES         ///
     /// ------------------------------- ///
 
-    /// @notice Fee percentage represented in hundredths of a bip (1 bip = 0.0001%).
-    uint24 public feeBips;
-
     /// @notice Swap fees in basis points (1 bip = 0.0001%)
+    /// Fee percentage represented in hundredths of a bip (1 bip = 0.0001%).
     uint24 public buyFeeBips;
     uint24 public sellFeeBips;
 
@@ -176,7 +174,9 @@ contract TaxHook is BaseHook, Ownable {
 
         uint256 _feeAmount;
         unchecked {
-            _feeAmount = uint256(_exactInput ? -params.amountSpecified : params.amountSpecified).computeFee(feeBips);
+            uint24 _feeBips = _exactInput ? buyFeeBips : sellFeeBips;
+            uint256 _amount = uint256(_exactInput ? -params.amountSpecified : params.amountSpecified);
+            _feeAmount = _amount.computeFee(_feeBips);
         }
 
         if (_feeAmount == 0) return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
@@ -222,7 +222,9 @@ contract TaxHook is BaseHook, Ownable {
 
         uint256 _feeAmount;
         unchecked {
-            _feeAmount = uint256(uint128(params.zeroForOne ? -delta.amount0() : delta.amount0())).computeFee(feeBips);
+            uint24 _feeBips = _exactInput ? sellFeeBips : buyFeeBips;
+            uint256 _amount = uint256(uint128(params.zeroForOne ? -delta.amount0() : delta.amount0()));
+            _feeAmount = _amount.computeFee(_feeBips);
         }
 
         if (_feeAmount == 0) return (BaseHook.afterSwap.selector, 0);
@@ -235,10 +237,12 @@ contract TaxHook is BaseHook, Ownable {
 
     /// @notice Calculates the fee amount without rounding up
     /// @param amount The transaction amount
-    /// @return fee The calculated fee amount
-    function calculateFee(uint256 amount) external view returns (uint256 fee) {
+    /// @return buyFee The calculated buy fee amount
+    /// @return sellFee The calculated sell fee amount
+    function calculateFees(uint256 amount) external view returns (uint256 buyFee, uint256 sellFee) {
         unchecked {
-            fee = amount.computeFee(feeBips);
+            buyFee = amount.computeFee(buyFeeBips);
+            sellFee = amount.computeFee(sellFeeBips);
         }
     }
 
@@ -268,7 +272,7 @@ contract TaxHook is BaseHook, Ownable {
 
     /// @notice Enables trading by setting launch parameters.
     /// @dev Can only be called once.
-    function enableTrading() external onlyOwner {
+    function launch() external onlyOwner {
         if (isLaunched) revert AlreadyLaunched();
 
         isLaunched = true;
@@ -313,19 +317,6 @@ contract TaxHook is BaseHook, Ownable {
         emit CooldownBlocksUpdated(newCooldownBlocks);
     }
 
-    function setBlacklist(address user, bool status) external onlyOwner {
-        if (user == address(0)) revert InvalidBlacklistAction();
-        isBlacklisted[user] = status;
-        emit AddressBlacklisted(user, status);
-    }
-
-    function setWhitelist(address user, bool excludeFees, bool excludeLimits) external onlyOwner {
-        if (user == address(0)) revert InvalidWhitelistAction();
-        isExcludedFromFees[user] = excludeFees;
-        isExcludedFromLimits[user] = excludeLimits;
-        emit AddressWhitelisted(user, excludeFees, excludeLimits);
-    }
-
     /// @notice Updates buy and sell fees.
     /// @param newBuyFeeBips New buy fee (in hundredths of a bip).
     /// @param newSellFeeBips New sell fee (in hundredths of a bip).
@@ -340,5 +331,72 @@ contract TaxHook is BaseHook, Ownable {
         sellFeeBips = newSellFeeBips;
 
         emit SwapFeesUpdated(_oldBuyFeeBips, newBuyFeeBips, _oldSellFeeBips, newSellFeeBips);
+    }
+
+    /// @notice Adds or removes a single address from the blacklist.
+    /// @param user Address to blacklist or unblacklist.
+    /// @param status True to blacklist, false to remove from blacklist.
+    function setBlacklist(address user, bool status) external onlyOwner {
+        _updateBlacklist(user, status);
+    }
+
+    /// @notice Adds or removes multiple addresses from the blacklist.
+    /// @param users List of user addresses.
+    /// @param status True to blacklist, false to remove from blacklist.
+    function setBlacklistBatch(address[] calldata users, bool status) external onlyOwner {
+        for (uint256 i = 0; i < users.length; i++) {
+            _updateBlacklist(users[i], status);
+        }
+    }
+
+    /// @notice Excludes a single address from fees and trading limits.
+    /// @param user Address to update.
+    /// @param excludeFees True to exclude from fees, false to include.
+    /// @param excludeLimits True to exclude from limits, false to include.
+    function setWhitelist(address user, bool excludeFees, bool excludeLimits) external onlyOwner {
+        _updateWhitelist(user, excludeFees, excludeLimits);
+    }
+
+    /// @notice Excludes multiple addresses from fees and trading limits.
+    /// @param users List of user addresses.
+    /// @param excludeFees True to exclude from fees, false to include.
+    /// @param excludeLimits True to exclude from limits, false to include.
+    function setWhitelistBatch(address[] calldata users, bool excludeFees, bool excludeLimits) external onlyOwner {
+        for (uint256 i = 0; i < users.length; i++) {
+            _updateWhitelist(users[i], excludeFees, excludeLimits);
+        }
+    }
+
+    /// ------------------------------- ///
+    ///       INTERNAL FUNCTIONS        ///
+    /// ------------------------------- ///
+
+    /// @dev Internal function to update the blacklist mapping.
+    /// @param user Address to blacklist or un-blacklist.
+    /// @param status True to blacklist, false to remove from blacklist.
+    function _updateBlacklist(address user, bool status) internal {
+        if (
+            user == address(0) || user == address(poolManager) || user == address(this) || isExcludedFromFees[user]
+                || isExcludedFromLimits[user]
+        ) {
+            revert InvalidBlacklistAction();
+        }
+
+        isBlacklisted[user] = status;
+        emit AddressBlacklisted(user, status);
+    }
+
+    /// @dev Internal function to update whitelist mappings.
+    /// @param user Address to update.
+    /// @param excludeFees True to exclude from fees, false to include.
+    /// @param excludeLimits True to exclude from limits, false to include.
+    function _updateWhitelist(address user, bool excludeFees, bool excludeLimits) internal {
+        if (user == address(0)) {
+            revert InvalidWhitelistAction();
+        }
+
+        isExcludedFromFees[user] = excludeFees;
+        isExcludedFromLimits[user] = excludeLimits;
+        emit AddressWhitelisted(user, excludeFees, excludeLimits);
     }
 }

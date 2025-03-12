@@ -11,6 +11,9 @@ library FeeLibrary {
     /// @notice Thrown when the fee exceeds the maximum limit (100%)
     error FeeTooLarge(uint24 fee);
 
+    /// @notice Thrown when the transaction amount is zero
+    error ZeroAmount();
+
     /// @notice The maximum fee in hundredths of a bip (1,000,000 = 100%)
     uint24 public constant MAX_FEE_BIPS = 1_000_000;
 
@@ -33,6 +36,8 @@ library FeeLibrary {
     /// @return feeAmount The calculated fee amount
     function computeFee(uint256 amount, uint24 feeBips) internal pure returns (uint256 feeAmount) {
         feeBips.validate();
+        if (amount == 0) revert ZeroAmount();
+        if (feeBips == 0) return 0;
         feeAmount = FullMath.mulDiv(amount, uint256(feeBips), uint256(MAX_FEE_BIPS));
     }
 }
