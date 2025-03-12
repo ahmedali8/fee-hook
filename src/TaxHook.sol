@@ -30,16 +30,72 @@ contract TaxHook is BaseHook, Ownable {
     using PoolIdLibrary for PoolKey;
     using SafeCast for *;
 
-    /// @notice Error thrown when attempting to set the same fee value.
-    error FeeUnchanged();
+    /// ------------------------------- ///
+    ///          ERROR MESSAGES         ///
+    /// ------------------------------- ///
+
+    error InvalidLimit();
+    error InvalidCooldown();
+    error AlreadyLaunched();
+    error InvalidBlacklistAction();
+    error InvalidWhitelistAction();
+
+    /// ------------------------------- ///
+    ///         STATE VARIABLES         ///
+    /// ------------------------------- ///
 
     /// @notice Fee percentage represented in hundredths of a bip (1 bip = 0.0001%).
     uint24 public feeBips;
 
-    /// @notice Emitted when the fee is updated.
-    /// @param oldFeeBips Previous fee value.
-    /// @param newFeeBips New fee value.
-    event FeeUpdated(uint24 oldFeeBips, uint24 newFeeBips);
+    /// @notice Swap fees in basis points (1 bip = 0.0001%)
+    uint24 public buyFeeBips;
+    uint24 public sellFeeBips;
+
+    /// @notice Maximum buy, sell, and wallet limits
+    uint256 public maxBuyAmount;
+    uint256 public maxSellAmount;
+    uint256 public maxWalletAmount;
+
+    /// @notice Whether cooldowns are enabled
+    bool public isCooldownEnabled;
+
+    /// @notice Cooldown period for transactions (blocks)
+    uint32 public cooldownBlocks;
+
+    bool public isLimitsEnabled;
+
+    bool public isTaxEnabled;
+
+    /// @notice Flag indicating whether trading is enabled.
+    bool public isLaunched;
+    uint32 public launchBlock;
+    uint64 public launchTime;
+
+    /// @notice Tracks last transaction block for cooldown enforcement
+    mapping(address user => uint32 lastBlock) public userLastTransactionBlock;
+
+    /// @notice Blacklisted addresses (prevent bots)
+    mapping(address user => bool blacklisted) public isBlacklisted;
+
+    /// @notice Excluded from fees
+    mapping(address user => bool excluded) public isExcludedFromFees;
+
+    /// @notice Excluded from trading limits
+    mapping(address user => bool excluded) public isExcludedFromLimits;
+
+    /// ------------------------------- ///
+    ///          EVENTS                 ///
+    /// ------------------------------- ///
+
+    event Launched(uint32 launchBlock, uint64 launchTime);
+    event SwapFeesUpdated(uint24 oldBuyFeeBips, uint24 newBuyFeeBips, uint24 oldSellFeeBips, uint24 newSellFeeBips);
+    event TradeLimitsUpdated(uint256 maxBuy, uint256 maxSell, uint256 maxWallet);
+    event CooldownBlocksUpdated(uint32 blocks);
+    event LimitsEnabledUpdated(bool enabled);
+    event TaxEnabledUpdated(bool enabled);
+    event CooldownEnabledUpdated(bool enabled);
+    event AddressBlacklisted(address indexed user, bool status);
+    event AddressWhitelisted(address indexed user, bool isExcludedFromFees, bool isExcludedFromLimits);
 
     /// @notice Emitted when a swap fee is collected.
     /// @param id The pool ID where the fee was taken.
@@ -48,32 +104,53 @@ contract TaxHook is BaseHook, Ownable {
     /// @param feeAmount1 Fee amount deducted from token1.
     event HookFee(PoolId indexed id, address indexed sender, uint128 feeAmount0, uint128 feeAmount1);
 
-    /// @notice Initializes the contract with the pool manager and an initial fee.
-    /// @dev Ensures that the initial fee value is validated.
-    /// @param _poolManager Address of the Uniswap v4 Pool Manager.
-    /// @param _initialOwner Address of the contract owner.
-    /// @param _initialFeeBips Initial fee in hundredths of a bip (0.0001% units).
-    constructor(IPoolManager _poolManager, address _initialOwner, uint24 _initialFeeBips)
-        BaseHook(_poolManager)
-        Ownable(_initialOwner)
-    {
-        _initialFeeBips.validate();
-        feeBips = _initialFeeBips;
+    /// ------------------------------- ///
+    ///       CONTRACT CONSTRUCTOR      ///
+    /// ------------------------------- ///
+
+    /// @notice Initializes the contract with the pool manager and default settings.
+    /// @param _poolManager The Uniswap v4 Pool Manager.
+    /// @param _initialOwner The initial contract owner.
+    /// @param _initialBuyFeeBips Initial buy fee (in hundredths of a bip).
+    /// @param _initialSellFeeBips Initial sell fee (in hundredths of a bip).
+    /// @param _maxBuyAmount Initial max buy limit.
+    /// @param _maxSellAmount Initial max sell limit.
+    /// @param _maxWalletAmount Initial max wallet size.
+    /// @param _cooldownBlocks Initial cooldown block duration.
+    constructor(
+        IPoolManager _poolManager,
+        address _initialOwner,
+        uint24 _initialBuyFeeBips,
+        uint24 _initialSellFeeBips,
+        uint256 _maxBuyAmount,
+        uint256 _maxSellAmount,
+        uint256 _maxWalletAmount,
+        uint32 _cooldownBlocks
+    ) BaseHook(_poolManager) Ownable(_initialOwner) {
+        // Validate initial fee values
+        _initialBuyFeeBips.validate();
+        _initialSellFeeBips.validate();
+
+        // Set initial fees
+        buyFeeBips = _initialBuyFeeBips;
+        sellFeeBips = _initialSellFeeBips;
+
+        // Set transaction limits
+        maxBuyAmount = _maxBuyAmount;
+        maxSellAmount = _maxSellAmount;
+        maxWalletAmount = _maxWalletAmount;
+
+        // Set cooldown settings
+        cooldownBlocks = _cooldownBlocks;
+
+        // Default state settings
+        isLimitsEnabled = true;
+        isTaxEnabled = true;
+        // isCooldownEnabled = false;
     }
 
     /// @notice Allows the contract to receive ETH.
     receive() external payable {}
-
-    /// @notice Updates the fee in hundredths of a bip.
-    /// @dev Emits a `FeeUpdated` event if the fee is changed.
-    /// @param newFeeBips The new fee value.
-    function setFee(uint24 newFeeBips) external onlyOwner {
-        newFeeBips.validate();
-        uint24 _oldFeeBips = feeBips;
-        if (newFeeBips == _oldFeeBips) revert FeeUnchanged();
-        feeBips = newFeeBips;
-        emit FeeUpdated(_oldFeeBips, newFeeBips);
-    }
 
     /// @notice Hook executed before a swap to deduct fees when applicable.
     /// @dev The contract deducts a fee from the specified input token when conditions are met.
@@ -183,5 +260,85 @@ contract TaxHook is BaseHook, Ownable {
             afterAddLiquidityReturnDelta: false,
             afterRemoveLiquidityReturnDelta: false
         });
+    }
+
+    /// ------------------------------- ///
+    ///       ADMIN SETTER FUNCTIONS   ///
+    /// ------------------------------- ///
+
+    /// @notice Enables trading by setting launch parameters.
+    /// @dev Can only be called once.
+    function enableTrading() external onlyOwner {
+        if (isLaunched) revert AlreadyLaunched();
+
+        isLaunched = true;
+        launchBlock = uint32(block.number);
+        launchTime = uint64(block.timestamp);
+
+        emit Launched(launchBlock, launchTime);
+    }
+
+    function setTradeLimits(uint256 newMaxBuy, uint256 newMaxSell, uint256 newMaxWallet) external onlyOwner {
+        if (newMaxBuy == 0 || newMaxSell == 0 || newMaxWallet == 0) revert InvalidLimit();
+        maxBuyAmount = newMaxBuy;
+        maxSellAmount = newMaxSell;
+        maxWalletAmount = newMaxWallet;
+        emit TradeLimitsUpdated(newMaxBuy, newMaxSell, newMaxWallet);
+    }
+
+    /// @notice Enables or disables trading limits.
+    /// @param status `true` to enable limits, `false` to disable.
+    function setLimitsEnabled(bool status) external onlyOwner {
+        isLimitsEnabled = status;
+        emit LimitsEnabledUpdated(status);
+    }
+
+    /// @notice Enables or disables tax collection.
+    /// @param status `true` to enable tax, `false` to disable.
+    function setTaxEnabled(bool status) external onlyOwner {
+        isTaxEnabled = status;
+        emit TaxEnabledUpdated(status);
+    }
+
+    /// @notice Enables or disables the cooldown mechanism.
+    /// @param status `true` to enable cooldowns, `false` to disable.
+    function setCooldownEnabled(bool status) external onlyOwner {
+        isCooldownEnabled = status;
+        emit CooldownEnabledUpdated(status);
+    }
+
+    function setCooldownBlocks(uint32 newCooldownBlocks) external onlyOwner {
+        if (newCooldownBlocks == 0) revert InvalidCooldown();
+        cooldownBlocks = newCooldownBlocks;
+        emit CooldownBlocksUpdated(newCooldownBlocks);
+    }
+
+    function setBlacklist(address user, bool status) external onlyOwner {
+        if (user == address(0)) revert InvalidBlacklistAction();
+        isBlacklisted[user] = status;
+        emit AddressBlacklisted(user, status);
+    }
+
+    function setWhitelist(address user, bool excludeFees, bool excludeLimits) external onlyOwner {
+        if (user == address(0)) revert InvalidWhitelistAction();
+        isExcludedFromFees[user] = excludeFees;
+        isExcludedFromLimits[user] = excludeLimits;
+        emit AddressWhitelisted(user, excludeFees, excludeLimits);
+    }
+
+    /// @notice Updates buy and sell fees.
+    /// @param newBuyFeeBips New buy fee (in hundredths of a bip).
+    /// @param newSellFeeBips New sell fee (in hundredths of a bip).
+    function setSwapFees(uint24 newBuyFeeBips, uint24 newSellFeeBips) external onlyOwner {
+        newBuyFeeBips.validate();
+        newSellFeeBips.validate();
+
+        uint24 _oldBuyFeeBips = buyFeeBips;
+        uint24 _oldSellFeeBips = sellFeeBips;
+
+        buyFeeBips = newBuyFeeBips;
+        sellFeeBips = newSellFeeBips;
+
+        emit SwapFeesUpdated(_oldBuyFeeBips, newBuyFeeBips, _oldSellFeeBips, newSellFeeBips);
     }
 }
