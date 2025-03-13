@@ -39,10 +39,19 @@ contract TaxHook is BaseHook, Ownable {
     error AlreadyLaunched();
     error InvalidBlacklistAction();
     error InvalidWhitelistAction();
+    error ETHTransferFailed();
+    error NotLaunched();
+    error BlacklistedUser();
+    error CooldownActive();
+    error MaxBuyExceeded();
+    error MaxSellExceeded();
+    error MaxWalletExceeded();
 
     /// ------------------------------- ///
     ///         STATE VARIABLES         ///
     /// ------------------------------- ///
+
+    address public constant DEAD_ADDRESS = address(0xdEaD);
 
     /// @notice Swap fees in basis points (1 bip = 0.0001%)
     /// Fee percentage represented in hundredths of a bip (1 bip = 0.0001%).
@@ -145,40 +154,91 @@ contract TaxHook is BaseHook, Ownable {
         isLimitsEnabled = true;
         isTaxEnabled = true;
         // isCooldownEnabled = false;
+
+        address[] memory _excluded = new address[](2);
+        _excluded[0] = DEAD_ADDRESS;
+        _excluded[1] = _initialOwner;
+        for (uint256 i = 0; i < _excluded.length; i++) {
+            _updateWhitelist(_excluded[i], true, true);
+        }
     }
 
     /// @notice Allows the contract to receive ETH.
-    receive() external payable {}
+    /// TODO: distribute eth to wallets
+    receive() external payable {
+        // (bool _success,) = owner().call{value: msg.value}("");
+        // if (!_success) revert ETHTransferFailed();
+    }
+
+    function _transferOwnership(address newOwner) internal override {
+        address oldOwner = owner();
+        if (oldOwner != address(0)) {
+            _updateWhitelist(oldOwner, false, false);
+        }
+        _updateWhitelist(newOwner, true, true);
+        super._transferOwnership(newOwner);
+    }
 
     /// @notice Hook executed before a swap to deduct fees when applicable.
     /// @dev The contract deducts a fee from the specified input token when conditions are met.
     ///
     /// Fee Deduction Logic:
-    /// - swapExactETHForTokens
+    /// - swapExactETHForTokens (Buy)
     ///   - If `exactInput` is `true` and `zeroForOne` is `true`, the specified token is ETH.
     ///   - exactInput && params.zeroForOne
     ///
-    /// - swapTokensForExactETH
+    /// - swapTokensForExactETH (Sell)
     ///   - If `exactInput` is `false` (exactOutput) and `zeroForOne` is `false` (oneForZero), the specified token is ETH.
     ///   - !_exactInput && !params.zeroForOne
     ///
     /// Combined control flow: exactInput == params.zeroForOne
-    function _beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
-        internal
-        override
-        returns (bytes4, BeforeSwapDelta, uint24)
-    {
+    function _beforeSwap(
+        address sender,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        bytes calldata /* hookData */
+    ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
         bool _exactInput = params.amountSpecified < 0;
+        uint256 _amount = uint256(_exactInput ? -params.amountSpecified : params.amountSpecified);
 
         if (_exactInput != params.zeroForOne) return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
 
-        uint256 _feeAmount;
-        unchecked {
-            uint24 _feeBips = _exactInput ? buyFeeBips : sellFeeBips;
-            uint256 _amount = uint256(_exactInput ? -params.amountSpecified : params.amountSpecified);
-            _feeAmount = _amount.computeFee(_feeBips);
+        // Trading must be enabled
+        if (!isLaunched) revert NotLaunched();
+
+        // Sender cannot be blacklisted
+        if (isBlacklisted[sender]) revert BlacklistedUser();
+
+        // Transaction Limits (Limits must be enabled OR sender must not be excluded from limits)
+        if (isLimitsEnabled && !isExcludedFromLimits[sender]) {
+            // Cooldown Enforcement
+            if (isCooldownEnabled) {
+                uint32 _blockNumber = uint32(block.number);
+                if (_blockNumber < userLastTransactionBlock[sender] + cooldownBlocks) {
+                    revert CooldownActive();
+                }
+                userLastTransactionBlock[sender] = _blockNumber;
+            }
+
+            // Check Max Buy Limit
+            if (_exactInput && params.zeroForOne && _amount > maxBuyAmount) revert MaxBuyExceeded();
+
+            // Check Max Sell Limit
+            if (!_exactInput && !params.zeroForOne && _amount > maxSellAmount) revert MaxSellExceeded();
+
+            // Check Max Wallet Limit
+            if (key.currency1.balanceOf(sender) > maxWalletAmount) revert MaxWalletExceeded();
         }
 
+        // Fee Exemption Check
+        if (isExcludedFromFees[sender]) return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
+
+        uint256 _feeAmount;
+        unchecked {
+            _feeAmount = _amount.computeFee(_exactInput ? buyFeeBips : sellFeeBips);
+        }
+
+        // If No Fee, Return Early
         if (_feeAmount == 0) return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
 
         poolManager.take({currency: key.currency0, to: address(this), amount: _feeAmount});
@@ -198,27 +258,30 @@ contract TaxHook is BaseHook, Ownable {
     /// @dev The contract deducts a fee from the unspecified token when conditions are met.
     ///
     /// Fee Deduction Logic:
-    /// - swapETHForExactTokens
+    /// - swapETHForExactTokens (Buy)
     ///   - If `exactInput` is `false` (exactOutput) and `zeroForOne` is `true`, the unspecified token is ETH.
     ///   - !exactInput && params.zeroForOne
     ///   - uint128(-delta.amount0())
     ///
-    /// - swapExactTokensForETH
+    /// - swapExactTokensForETH (Sell)
     ///   - If `exactInput` is `true` and `zeroForOne` is `false` (oneForZero), the unspecified token is ETH.
     ///   - exactInput && !params.zeroForOne
     ///   - uint128(delta.amount0())
     ///
     /// Combined control flow: exactInput != params.zeroForOne
     function _afterSwap(
-        address,
+        address sender,
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         BalanceDelta delta,
-        bytes calldata
+        bytes calldata /* hookData */
     ) internal override returns (bytes4, int128) {
         bool _exactInput = params.amountSpecified < 0;
 
         if (_exactInput == params.zeroForOne) return (BaseHook.afterSwap.selector, 0);
+
+        // Fee Exemption Check
+        if (isExcludedFromFees[sender]) return (BaseHook.afterSwap.selector, 0);
 
         uint256 _feeAmount;
         unchecked {
@@ -377,7 +440,7 @@ contract TaxHook is BaseHook, Ownable {
     function _updateBlacklist(address user, bool status) internal {
         if (
             user == address(0) || user == address(poolManager) || user == address(this) || isExcludedFromFees[user]
-                || isExcludedFromLimits[user]
+                || isExcludedFromLimits[user] || isBlacklisted[user] == status
         ) {
             revert InvalidBlacklistAction();
         }
@@ -391,12 +454,22 @@ contract TaxHook is BaseHook, Ownable {
     /// @param excludeFees True to exclude from fees, false to include.
     /// @param excludeLimits True to exclude from limits, false to include.
     function _updateWhitelist(address user, bool excludeFees, bool excludeLimits) internal {
-        if (user == address(0)) {
+        bool _feesUnchanged = isExcludedFromFees[user] == excludeFees;
+        bool _limitsUnchanged = isExcludedFromLimits[user] == excludeLimits;
+
+        // Check if user is zero address or both values are unchanged
+        if (user == address(0) || (_feesUnchanged && _limitsUnchanged)) {
             revert InvalidWhitelistAction();
         }
 
-        isExcludedFromFees[user] = excludeFees;
-        isExcludedFromLimits[user] = excludeLimits;
+        // Only update storage if values are changing
+        if (!_feesUnchanged) {
+            isExcludedFromFees[user] = excludeFees;
+        }
+        if (!_limitsUnchanged) {
+            isExcludedFromLimits[user] = excludeLimits;
+        }
+
         emit AddressWhitelisted(user, excludeFees, excludeLimits);
     }
 }
