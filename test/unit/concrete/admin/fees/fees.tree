@@ -1,0 +1,51 @@
+Fees_Unit_Concrete_Test
+└── When updating swap fees // The contract owner can update the buy and sell fees.
+    └── When a non-owner tries to update fees
+        └── It should revert.
+            └── Because only the contract owner can update fees.
+            └── And it should revert with OwnableUnauthorizedAccount.
+    └── When setting an invalid fee value
+        └── It should revert.
+            └── Because invalid fee values must not be accepted.
+            └── And it should revert with an appropriate error.
+    └── When setting new valid fee values
+        └── It should update `buyFeeBips` and `sellFeeBips`.
+            └── Because the contract must enforce updated fee percentages.
+        └── It should emit a `SwapFeesUpdated` event.
+            └── Because logs should track fee updates.
+
+└── When excluding an address from fees // Some addresses should be exempt from paying fees.
+    └── When a non-owner tries to exclude an address from fees
+        └── It should revert.
+            └── Because only the contract owner can manage fee exclusions.
+            └── And it should revert with OwnableUnauthorizedAccount.
+    └── When excluding an already excluded address
+        └── It should revert.
+            └── Because there should be no redundant updates.
+            └── And it should revert with InvalidWhitelistAction.
+    └── When excluding a valid address from fees
+        └── It should update `isExcludedFromFees`.
+            └── Because excluded addresses should not pay swap fees.
+        └── It should emit an `AddressWhitelisted` event.
+            └── Because logs should track fee exclusions.
+    └── When removing an address from fee exclusion
+        └── It should update `isExcludedFromFees` to false.
+            └── Because the address should now pay swap fees.
+        └── It should emit an `AddressWhitelisted` event.
+            └── Because logs should track fee updates.
+
+└── When toggling fee enforcement // The contract owner can enable or disable fees globally.
+    └── When a non-owner tries to enable or disable fees
+        └── It should revert.
+            └── Because only the contract owner can manage fee settings.
+            └── And it should revert with OwnableUnauthorizedAccount.
+    └── When disabling fees
+        └── It should update `isFeeEnabled` to false.
+            └── Because no fees should be charged when disabled.
+        └── It should emit a `FeeEnabledUpdated` event.
+            └── Because logs should track fee deactivation.
+    └── When enabling fees
+        └── It should update `isFeeEnabled` to true.
+            └── Because fees should be applied when enabled.
+        └── It should emit a `FeeEnabledUpdated` event.
+            └── Because logs should track fee activation.

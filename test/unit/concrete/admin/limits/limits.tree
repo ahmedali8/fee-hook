@@ -1,0 +1,31 @@
+Limits_Unit_Concrete_Test
+└── When updating trade limits // The contract owner can set buy, sell, and wallet limits.
+    └── When a non-owner tries to update trade limits
+        └── It should revert.
+            └── Because only the contract owner can update trade limits.
+            └── And it should revert with OwnableUnauthorizedAccount.
+    └── When setting new valid trade limits
+        └── It should update `maxBuyAmount`, `maxSellAmount`, and `maxWalletAmount`.
+            └── Because the contract must enforce updated limits correctly.
+        └── It should emit a `TradeLimitsUpdated` event.
+            └── Because logs should track trade limit changes.
+    └── When setting trade limits to zero
+        └── It should revert.
+            └── Because zero limits are invalid.
+            └── And it should revert with InvalidLimit.
+
+└── When enabling or disabling trade limits // The contract owner can toggle limit enforcement.
+    └── When a non-owner tries to enable or disable limits
+        └── It should revert.
+            └── Because only the contract owner can change limit enforcement.
+            └── And it should revert with OwnableUnauthorizedAccount.
+    └── When enabling limits
+        └── It should update `isLimitsEnabled` to true.
+            └── Because limits should be enforced when enabled.
+        └── It should emit a `LimitsEnabledUpdated` event.
+            └── Because logs should track limit activation.
+    └── When disabling limits
+        └── It should update `isLimitsEnabled` to false.
+            └── Because limits should no longer be enforced.
+        └── It should emit a `LimitsEnabledUpdated` event.
+            └── Because logs should track limit deactivation.

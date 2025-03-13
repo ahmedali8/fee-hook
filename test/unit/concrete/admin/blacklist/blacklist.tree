@@ -1,0 +1,54 @@
+Blacklist_Unit_Concrete_Test
+└── When setBlacklist is called // The setBlacklist function adds or removes addresses from the blacklist.
+    └── When a non-owner tries to call setBlacklist
+        └── It should revert.
+            └── Because only the owner can modify the blacklist.
+            └── And it should revert with "Ownable: caller is not the owner".
+    └── When trying to blacklist an invalid address
+        └── When trying to blacklist the zero address
+            └── It should revert.
+                └── Because the zero address cannot be blacklisted.
+                └── And it should revert with "InvalidBlacklistAction".
+        └── When trying to blacklist the contract itself
+            └── It should revert.
+                └── Because the contract should not be blacklisted.
+                └── And it should revert with "InvalidBlacklistAction".
+        └── When trying to blacklist the pool manager address
+            └── It should revert.
+                └── Because the pool manager should not be blacklisted.
+                └── And it should revert with "InvalidBlacklistAction".
+        └── When trying to blacklist an address excluded from fees or limits
+            └── It should revert.
+                └── Because whitelisted users should not be blacklisted.
+                └── And it should revert with "InvalidBlacklistAction".
+    └── When blacklisting a user
+        └── When blacklisting a new user
+            └── It should update isBlacklisted mapping.
+                └── Because the user should be flagged as blacklisted.
+            └── It should emit an AddressBlacklisted event.
+                └── Because the event signals that the user was blacklisted.
+        └── When blacklisting a user already blacklisted
+            └── It should revert.
+                └── Because blacklisting a user twice is redundant.
+                └── And it should revert with "InvalidBlacklistAction".
+    └── When unblacklisting a user
+        └── When unblacklisting a blacklisted user
+            └── It should update isBlacklisted mapping.
+                └── Because the user should no longer be blacklisted.
+            └── It should emit an AddressBlacklisted event.
+                └── Because the event signals that the user was removed from the blacklist.
+        └── When unblacklisting a user not blacklisted
+            └── It should revert.
+                └── Because unblacklisting a non-blacklisted user is redundant.
+                └── And it should revert with "InvalidBlacklistAction".
+    └── When calling setBlacklistBatch
+        └── When blacklisting multiple users
+            └── It should correctly blacklist multiple users.
+                └── Because batch processing should update the isBlacklisted mapping for each user.
+            └── It should emit multiple AddressBlacklisted events.
+                └── Because each user in the batch should trigger an event.
+        └── When unblacklisting multiple users
+            └── It should correctly unblacklist multiple users.
+                └── Because batch processing should remove the blacklist flag for each user.
+            └── It should emit multiple AddressBlacklisted events.
+                └── Because each user in the batch should trigger an event.

@@ -1,0 +1,61 @@
+Whitelist_Unit_Concrete_Test
+└── When setWhitelist is called // The setWhitelist function manages fee and limit exemptions.
+    └── When a non-owner tries to call setWhitelist
+        └── It should revert.
+            └── Because only the owner can modify the whitelist.
+            └── And it should revert with "Ownable: caller is not the owner".
+    └── When trying to whitelist an invalid address
+        └── When trying to whitelist the zero address
+            └── It should revert.
+                └── Because the zero address cannot be whitelisted.
+                └── And it should revert with "InvalidWhitelistAction".
+        └── When trying to whitelist the contract itself
+            └── It should revert.
+                └── Because the contract should not be whitelisted.
+                └── And it should revert with "InvalidWhitelistAction".
+        └── When trying to whitelist an address with unchanged settings
+            └── It should revert.
+                └── Because no change is being made.
+                └── And it should revert with "InvalidWhitelistAction".
+    └── When updating the whitelist
+        └── When adding a new address to the whitelist
+            └── It should update isExcludedFromFees mapping.
+                └── Because the user should be marked as fee-exempt.
+            └── It should update isExcludedFromLimits mapping.
+                └── Because the user should be marked as limit-exempt.
+            └── It should emit an AddressWhitelisted event.
+                └── Because the event signals that the user was added to the whitelist.
+        └── When updating an existing whitelist entry
+            └── When modifying only fee exemption
+                └── It should update isExcludedFromFees mapping.
+                    └── Because the fee exemption status should change.
+                └── It should not update isExcludedFromLimits mapping.
+                    └── Because the limit exemption remains unchanged.
+                └── It should emit an AddressWhitelisted event.
+                    └── Because the event signals that the whitelist status changed.
+            └── When modifying only limit exemption
+                └── It should update isExcludedFromLimits mapping.
+                    └── Because the limit exemption status should change.
+                └── It should not update isExcludedFromFees mapping.
+                    └── Because the fee exemption remains unchanged.
+                └── It should emit an AddressWhitelisted event.
+                    └── Because the event signals that the whitelist status changed.
+    └── When calling setWhitelistBatch
+        └── When whitelisting multiple addresses
+            └── It should correctly update fee exemptions for all addresses.
+                └── Because each address should be marked as fee-exempt.
+            └── It should correctly update limit exemptions for all addresses.
+                └── Because each address should be marked as limit-exempt.
+            └── It should emit multiple AddressWhitelisted events.
+                └── Because each user in the batch should trigger an event.
+        └── When modifying whitelist entries in a batch
+            └── When modifying only fee exemptions
+                └── It should update isExcludedFromFees mapping for all addresses.
+                    └── Because the fee exemption status should change.
+                └── It should not update isExcludedFromLimits mapping.
+                    └── Because the limit exemption remains unchanged.
+            └── When modifying only limit exemptions
+                └── It should update isExcludedFromLimits mapping for all addresses.
+                    └── Because the limit exemption status should change.
+                └── It should not update isExcludedFromFees mapping.
+                    └── Because the fee exemption remains unchanged.

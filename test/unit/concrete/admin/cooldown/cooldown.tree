@@ -1,0 +1,25 @@
+Cooldown_Unit_Concrete_Test
+└── When updating the cooldown settings // Cooldown limits can be enabled, disabled, or modified.
+    └── When a non-owner tries to update cooldown settings
+        └── It should revert.
+            └── Because only the contract owner can update cooldown settings.
+            └── And it should revert with OwnableUnauthorizedAccount.
+    └── When setting cooldown blocks to zero
+        └── It should revert.
+            └── Because cooldown blocks must be greater than zero.
+            └── And it should revert with InvalidCooldown.
+    └── When setting a valid cooldown block duration
+        └── It should update the `cooldownBlocks` state variable.
+            └── Because the contract should enforce the new cooldown duration.
+        └── It should emit a `CooldownBlocksUpdated` event.
+            └── Because logs should track changes to cooldown settings.
+    └── When enabling cooldowns
+        └── It should update `isCooldownEnabled` to true.
+            └── Because cooldowns should no longer be enforced.
+        └── It should emit a `CooldownEnabledUpdated` event.
+            └── Because logs should track cooldown deactivation.
+    └── When disabling cooldowns
+        └── It should update `isCooldownEnabled` to false.
+            └── Because cooldowns should no longer be enforced.
+        └── It should emit a `CooldownEnabledUpdated` event.
+            └── Because logs should track cooldown deactivation.
