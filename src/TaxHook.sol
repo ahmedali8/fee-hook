@@ -71,7 +71,7 @@ contract TaxHook is BaseHook, Ownable {
 
     bool public isLimitsEnabled;
 
-    bool public isTaxEnabled;
+    bool public isFeeEnabled;
 
     /// @notice Flag indicating whether trading is enabled.
     bool public isLaunched;
@@ -99,7 +99,7 @@ contract TaxHook is BaseHook, Ownable {
     event TradeLimitsUpdated(uint256 maxBuy, uint256 maxSell, uint256 maxWallet);
     event CooldownBlocksUpdated(uint32 blocks);
     event LimitsEnabledUpdated(bool enabled);
-    event TaxEnabledUpdated(bool enabled);
+    event FeeEnabledUpdated(bool enabled);
     event CooldownEnabledUpdated(bool enabled);
     event AddressBlacklisted(address indexed user, bool status);
     event AddressWhitelisted(address indexed user, bool isExcludedFromFees, bool isExcludedFromLimits);
@@ -152,7 +152,7 @@ contract TaxHook is BaseHook, Ownable {
 
         // Default state settings
         isLimitsEnabled = true;
-        isTaxEnabled = true;
+        isFeeEnabled = true;
         // isCooldownEnabled = false;
 
         address[] memory _excluded = new address[](2);
@@ -230,8 +230,10 @@ contract TaxHook is BaseHook, Ownable {
             if (key.currency1.balanceOf(sender) > maxWalletAmount) revert MaxWalletExceeded();
         }
 
-        // Fee Exemption Check
-        if (isExcludedFromFees[sender]) return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
+        // Global Fee Disable Check OR Fee Exemption Check
+        if (!isFeeEnabled || isExcludedFromFees[sender]) {
+            return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
+        }
 
         uint256 _feeAmount;
         unchecked {
@@ -280,8 +282,8 @@ contract TaxHook is BaseHook, Ownable {
 
         if (_exactInput == params.zeroForOne) return (BaseHook.afterSwap.selector, 0);
 
-        // Fee Exemption Check
-        if (isExcludedFromFees[sender]) return (BaseHook.afterSwap.selector, 0);
+        // Global Fee Disable Check OR Fee Exemption Check
+        if (!isFeeEnabled || isExcludedFromFees[sender]) return (BaseHook.afterSwap.selector, 0);
 
         uint256 _feeAmount;
         unchecked {
@@ -360,11 +362,11 @@ contract TaxHook is BaseHook, Ownable {
         emit LimitsEnabledUpdated(status);
     }
 
-    /// @notice Enables or disables tax collection.
-    /// @param status `true` to enable tax, `false` to disable.
-    function setTaxEnabled(bool status) external onlyOwner {
-        isTaxEnabled = status;
-        emit TaxEnabledUpdated(status);
+    /// @notice Enables or disables fee collection.
+    /// @param status `true` to enable fee, `false` to disable.
+    function setFeeEnabled(bool status) external onlyOwner {
+        isFeeEnabled = status;
+        emit FeeEnabledUpdated(status);
     }
 
     /// @notice Enables or disables the cooldown mechanism.
