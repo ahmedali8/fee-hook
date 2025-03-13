@@ -20,6 +20,8 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
+import "forge-std/console2.sol";
+
 /// @title TaxHook
 /// @notice A Uniswap v4 hook contract that implements fee collection logic before and after swaps.
 /// @dev This contract applies dynamic fees based on swap direction and token flows.
@@ -155,12 +157,13 @@ contract TaxHook is BaseHook, Ownable {
         isFeeEnabled = true;
         // isCooldownEnabled = false;
 
-        address[] memory _excluded = new address[](2);
-        _excluded[0] = DEAD_ADDRESS;
-        _excluded[1] = _initialOwner;
-        for (uint256 i = 0; i < _excluded.length; i++) {
-            _updateWhitelist(_excluded[i], true, true);
-        }
+        // address[] memory _excluded = new address[](2);
+        // _excluded[0] = DEAD_ADDRESS;
+        // _excluded[1] = _initialOwner;
+        // for (uint256 i = 0; i < _excluded.length; i++) {
+        //     _updateWhitelist(_excluded[i], true, true);
+        // }
+        _updateWhitelist(DEAD_ADDRESS, true, true);
     }
 
     /// @notice Allows the contract to receive ETH.
@@ -171,9 +174,9 @@ contract TaxHook is BaseHook, Ownable {
     }
 
     function _transferOwnership(address newOwner) internal override {
-        address oldOwner = owner();
-        if (oldOwner != address(0)) {
-            _updateWhitelist(oldOwner, false, false);
+        address _oldOwner = owner();
+        if (_oldOwner != address(0)) {
+            _updateWhitelist(_oldOwner, false, false);
         }
         _updateWhitelist(newOwner, true, true);
         super._transferOwnership(newOwner);
@@ -456,8 +459,17 @@ contract TaxHook is BaseHook, Ownable {
     /// @param excludeFees True to exclude from fees, false to include.
     /// @param excludeLimits True to exclude from limits, false to include.
     function _updateWhitelist(address user, bool excludeFees, bool excludeLimits) internal {
+        console2.log("user: ", user);
+        console2.log("isExcludedFromFees[user]: ", isExcludedFromFees[user]);
+        console2.log("isExcludedFromLimits[user]: ", isExcludedFromLimits[user]);
+        console2.log("excludeFees: ", excludeFees);
+        console2.log("excludeLimits: ", excludeLimits);
+
         bool _feesUnchanged = isExcludedFromFees[user] == excludeFees;
         bool _limitsUnchanged = isExcludedFromLimits[user] == excludeLimits;
+
+        console2.log("_feesUnchanged: ", _feesUnchanged);
+        console2.log("_limitsUnchanged: ", _limitsUnchanged);
 
         // Check if user is zero address or both values are unchanged
         if (user == address(0) || (_feesUnchanged && _limitsUnchanged)) {
