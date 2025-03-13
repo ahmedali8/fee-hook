@@ -29,11 +29,11 @@ import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {EasyPosm} from "./utils/EasyPosm.sol";
 import {Fixtures} from "./utils/Fixtures.sol";
 
-import {TaxHook} from "src/TaxHook.sol";
+import {FeeHook} from "src/FeeHook.sol";
 
 import "forge-std/console2.sol";
 
-contract TaxHookTest is Test, Fixtures {
+contract FeeHookTest is Test, Fixtures {
     using EasyPosm for IPositionManager;
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
@@ -46,7 +46,7 @@ contract TaxHookTest is Test, Fixtures {
 
     IV4Quoter quoter;
 
-    TaxHook hook;
+    FeeHook hook;
     PoolId poolId;
 
     uint256 tokenId;
@@ -79,9 +79,9 @@ contract TaxHookTest is Test, Fixtures {
             (100_000_000 ether * 10) / 1000, // maxWalletAmount
             3 // cooldownBlocks
         );
-        deployCodeTo("TaxHook.sol:TaxHook", constructorArgs, flags);
-        hook = TaxHook(payable(flags));
-        vm.label(flags, "TaxHook");
+        deployCodeTo("FeeHook.sol:FeeHook", constructorArgs, flags);
+        hook = FeeHook(payable(flags));
+        vm.label(flags, "FeeHook");
 
         // Create the pool
         key = PoolKey(CurrencyLibrary.ADDRESS_ZERO, currency1, 3000, 60, IHooks(hook));
@@ -114,11 +114,11 @@ contract TaxHookTest is Test, Fixtures {
         );
     }
 
-    function test_TaxHook_Owner() public view {
+    function test_FeeHook_Owner() public view {
         assertEq(hook.owner(), msg.sender, "owner");
     }
 
-    function test_TaxHook_ZeroForOne_ExactInput() public {
+    function test_FeeHook_ZeroForOne_ExactInput() public {
         _setApprovalsFor(user, address(Currency.unwrap(key.currency1)));
 
         // Seeds liquidity into the user.
@@ -189,7 +189,7 @@ contract TaxHookTest is Test, Fixtures {
         assertEq(hookBalanceAfter0, hookBalanceBefore0 + expectedFeeAmount, "amount 0");
     }
 
-    function test_TaxHook_ZeroForOne_ExactOutput() public {
+    function test_FeeHook_ZeroForOne_ExactOutput() public {
         _setApprovalsFor(user, address(Currency.unwrap(key.currency1)));
 
         // Seeds liquidity into the user.
@@ -269,7 +269,7 @@ contract TaxHookTest is Test, Fixtures {
         // assertEq(hookBalanceAfter0, hookBalanceBefore0 + expectedFeeAmount, "amount 0");
     }
 
-    function test_TaxHook_OneForZero_ExactInput() public {
+    function test_FeeHook_OneForZero_ExactInput() public {
         _setApprovalsFor(user, address(Currency.unwrap(key.currency1)));
 
         // Seeds liquidity into the user.
@@ -348,7 +348,7 @@ contract TaxHookTest is Test, Fixtures {
         assertEq(hookBalanceAfter1, hookBalanceBefore1, "hook amount 1");
     }
 
-    function test_TaxHook_OneForZero_ExactOutput() public {
+    function test_FeeHook_OneForZero_ExactOutput() public {
         _setApprovalsFor(user, address(Currency.unwrap(key.currency1)));
 
         // Seeds liquidity into the user.

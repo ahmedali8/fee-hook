@@ -22,10 +22,10 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 import "forge-std/console2.sol";
 
-/// @title TaxHook
+/// @title FeeHook
 /// @notice A Uniswap v4 hook contract that implements fee collection logic before and after swaps.
 /// @dev This contract applies dynamic fees based on swap direction and token flows.
-contract TaxHook is BaseHook, Ownable {
+contract FeeHook is BaseHook, Ownable {
     using FeeLibrary for uint256;
     using FeeLibrary for uint24;
     using BalanceDeltaLibrary for BalanceDelta;
