@@ -3,7 +3,7 @@ Launch_Unit_Concrete_Test
     └── When a non-owner tries to call launch
         └── It should revert.
             └── Because only the owner has permission to launch trading.
-            └── And it should revert with "Ownable: caller is not the owner".
+            └── And it should revert with OwnableUnauthorizedAccount.
     └── When the contract is not yet launched
         └── It should set isLaunched to true.
             └── Because calling launch should enable trading.

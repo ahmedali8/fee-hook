@@ -3,7 +3,7 @@ Whitelist_Unit_Concrete_Test
     └── When a non-owner tries to call setWhitelist
         └── It should revert.
             └── Because only the owner can modify the whitelist.
-            └── And it should revert with "Ownable: caller is not the owner".
+            └── And it should revert with OwnableUnauthorizedAccount.
     └── When trying to whitelist an invalid address
         └── When trying to whitelist the zero address
             └── It should revert.
