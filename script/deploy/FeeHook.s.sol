@@ -15,11 +15,11 @@ contract DeployFeeHook is Script, Constants {
 
     function deployFeeHook(
         address initialOwner,
+        uint128 maxBuyAmount,
+        uint128 maxSellAmount,
+        uint128 maxWalletAmount,
         uint24 initialBuyFeeBips,
         uint24 initialSellFeeBips,
-        uint256 maxBuyAmount,
-        uint256 maxSellAmount,
-        uint256 maxWalletAmount,
         uint32 cooldownBlocks
     ) internal returns (FeeHook feeHook) {
         // hook contracts must have specific flags encoded in the address
@@ -32,11 +32,11 @@ contract DeployFeeHook is Script, Constants {
         bytes memory constructorArgs = abi.encode(
             POOLMANAGER,
             initialOwner,
-            initialBuyFeeBips,
-            initialSellFeeBips,
             maxBuyAmount,
             maxSellAmount,
             maxWalletAmount,
+            initialBuyFeeBips,
+            initialSellFeeBips,
             cooldownBlocks
         );
         (address hookAddress, bytes32 salt) =
@@ -45,11 +45,11 @@ contract DeployFeeHook is Script, Constants {
         feeHook = new FeeHook{salt: salt}(
             IPoolManager(POOLMANAGER),
             initialOwner,
-            initialBuyFeeBips,
-            initialSellFeeBips,
             maxBuyAmount,
             maxSellAmount,
             maxWalletAmount,
+            initialBuyFeeBips,
+            initialSellFeeBips,
             cooldownBlocks
         );
 
@@ -62,11 +62,11 @@ contract DeployFeeHook is Script, Constants {
         console2.log("caller: ", msg.sender);
         FeeHook feeHook = deployFeeHook({
             initialOwner: msg.sender,
-            initialBuyFeeBips: 10_000, // 1%
-            initialSellFeeBips: 10_000, // 1%
             maxBuyAmount: (100_000_000 ether * 10) / 1000, // 1% of 100M
             maxSellAmount: (100_000_000 ether * 10) / 1000, // 1% of 100M
             maxWalletAmount: (100_000_000 ether * 10) / 1000, // 1% of 100M
+            initialBuyFeeBips: 10_000, // 1%
+            initialSellFeeBips: 10_000, // 1%
             cooldownBlocks: 3
         });
         vm.stopBroadcast();

@@ -72,11 +72,11 @@ contract FeeHookTest is Test, Fixtures {
         bytes memory constructorArgs = abi.encode(
             manager,
             msg.sender, // initialOwner
-            100, // initialBuyFeeBips
-            100, // initialSellFeeBips
             (100_000_000 ether * 10) / 1000, // maxBuyAmount
             (100_000_000 ether * 10) / 1000, // maxSellAmount
             (100_000_000 ether * 10) / 1000, // maxWalletAmount
+            100, // initialBuyFeeBips
+            100, // initialSellFeeBips
             0 // cooldownBlocks
         );
         deployCodeTo("FeeHook.sol:FeeHook", constructorArgs, flags);

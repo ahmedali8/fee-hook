@@ -36,8 +36,6 @@ contract FeeHook is BaseHook, Ownable {
     ///          ERROR MESSAGES         ///
     /// ------------------------------- ///
 
-    error InvalidLimit();
-    error InvalidCooldown();
     error AlreadyLaunched();
     error InvalidBlacklistAction();
     error InvalidWhitelistAction();
@@ -57,7 +55,6 @@ contract FeeHook is BaseHook, Ownable {
 
     /// @notice Flag indicating whether trading is enabled.
     uint32 public launchBlock;
-    uint64 public launchTime;
 
     /// @notice Swap fees in basis points (1 bip = 0.0001%)
     /// Fee percentage represented in hundredths of a bip (1 bip = 0.0001%).
@@ -68,9 +65,9 @@ contract FeeHook is BaseHook, Ownable {
     uint32 public cooldownBlocks;
 
     /// @notice Maximum buy, sell, and wallet limits
-    uint256 public maxBuyAmount;
-    uint256 public maxSellAmount;
-    uint256 public maxWalletAmount;
+    uint128 public maxBuyAmount;
+    uint128 public maxSellAmount;
+    uint128 public maxWalletAmount;
 
     /// @notice Tracks last transaction block for cooldown enforcement
     mapping(address user => uint32 lastBlock) public userLastTransactionBlock;
@@ -88,9 +85,9 @@ contract FeeHook is BaseHook, Ownable {
     ///          EVENTS                 ///
     /// ------------------------------- ///
 
-    event Launched(uint32 launchBlock, uint64 launchTime);
+    event Launched(uint32 launchBlock);
     event SwapFeesUpdated(uint24 oldBuyFeeBips, uint24 newBuyFeeBips, uint24 oldSellFeeBips, uint24 newSellFeeBips);
-    event TradeLimitsUpdated(uint256 maxBuy, uint256 maxSell, uint256 maxWallet);
+    event TradeLimitsUpdated(uint128 maxBuy, uint128 maxSell, uint128 maxWallet);
     event CooldownBlocksUpdated(uint32 blocks);
     event LimitsEnabledUpdated(bool enabled);
     event FeeEnabledUpdated(bool enabled);
@@ -112,20 +109,20 @@ contract FeeHook is BaseHook, Ownable {
     /// @notice Initializes the contract with the pool manager and default settings.
     /// @param _poolManager The Uniswap v4 Pool Manager.
     /// @param _initialOwner The initial contract owner.
-    /// @param _initialBuyFeeBips Initial buy fee (in hundredths of a bip).
-    /// @param _initialSellFeeBips Initial sell fee (in hundredths of a bip).
     /// @param _maxBuyAmount Initial max buy limit.
     /// @param _maxSellAmount Initial max sell limit.
     /// @param _maxWalletAmount Initial max wallet size.
+    /// @param _initialBuyFeeBips Initial buy fee (in hundredths of a bip).
+    /// @param _initialSellFeeBips Initial sell fee (in hundredths of a bip).
     /// @param _cooldownBlocks Initial cooldown block duration.
     constructor(
         IPoolManager _poolManager,
         address _initialOwner,
+        uint128 _maxBuyAmount,
+        uint128 _maxSellAmount,
+        uint128 _maxWalletAmount,
         uint24 _initialBuyFeeBips,
         uint24 _initialSellFeeBips,
-        uint256 _maxBuyAmount,
-        uint256 _maxSellAmount,
-        uint256 _maxWalletAmount,
         uint32 _cooldownBlocks
     ) BaseHook(_poolManager) Ownable(_initialOwner) {
         // Validate initial fee values
@@ -322,16 +319,14 @@ contract FeeHook is BaseHook, Ownable {
     /// @notice Enables trading by setting launch parameters.
     /// @dev Can only be called once.
     function launch() external onlyOwner {
-        if (uint32(launchBlock) > 0 || uint64(launchTime) > 0) revert AlreadyLaunched();
+        if (uint32(launchBlock) > 0) revert AlreadyLaunched();
 
         launchBlock = uint32(block.number);
-        launchTime = uint64(block.timestamp);
 
-        emit Launched(launchBlock, launchTime);
+        emit Launched(launchBlock);
     }
 
-    function setTradeLimits(uint256 newMaxBuy, uint256 newMaxSell, uint256 newMaxWallet) external onlyOwner {
-        if (newMaxBuy == 0 || newMaxSell == 0 || newMaxWallet == 0) revert InvalidLimit();
+    function setTradeLimits(uint128 newMaxBuy, uint128 newMaxSell, uint128 newMaxWallet) external onlyOwner {
         maxBuyAmount = newMaxBuy;
         maxSellAmount = newMaxSell;
         maxWalletAmount = newMaxWallet;
@@ -339,7 +334,6 @@ contract FeeHook is BaseHook, Ownable {
     }
 
     function setCooldownBlocks(uint32 newCooldownBlocks) external onlyOwner {
-        if (newCooldownBlocks == 0) revert InvalidCooldown();
         cooldownBlocks = newCooldownBlocks;
         emit CooldownBlocksUpdated(newCooldownBlocks);
     }
@@ -399,10 +393,10 @@ contract FeeHook is BaseHook, Ownable {
     /// ------------------------------- ///
 
     /// @notice Whether trading is enabled.
-    /// @dev Trading is enabled if launchBlock and launchTime are greater than zero.
+    /// @dev Trading is enabled if launchBlock is greater than zero.
     /// @return `true` if trading is enabled, `false` otherwise.
     function isLaunched() public view returns (bool) {
-        return launchBlock > 0 && launchTime > 0;
+        return launchBlock > 0;
     }
 
     /// @notice Whether cooldowns are enabled
