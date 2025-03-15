@@ -1,0 +1,16 @@
+FeeHook_SetFeeEnabled_Unit_Concrete_Test
+├── When caller is not the owner
+│   └── It should revert.
+│       ├── Because only the contract owner can manage fee settings.
+│       └── And it should revert with OwnableUnauthorizedAccount.
+└── When caller is the owner
+    ├── When disabling fees
+    │   ├── It should update {isFeeEnabled} to false.
+    │   │   └── Because no fees should be charged when disabled.
+    │   └── It should emit a {FeeEnabledUpdated} event.
+    │       └── Because logs should track fee deactivation.
+    └── When enabling fees
+        ├── It should update {isFeeEnabled} to true.
+        │   └── Because fees should be applied when enabled.
+        └── It should emit a {FeeEnabledUpdated} event.
+            └── Because logs should track fee activation.

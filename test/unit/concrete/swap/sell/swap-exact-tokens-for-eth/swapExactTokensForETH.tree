@@ -1,58 +1,57 @@
-SwapExactTokensForETH_Unit_Concrete_Test
-└── When executing swapExactTokensForETH // A user swaps an exact amount of tokens for ETH.
-    └── When the contract is not launched
+FeeHook_SwapExactTokensForETH_Unit_Concrete_Test
+└── When contract is not launched
+    └── It should revert.
+        ├── Because swaps cannot happen before launch.
+        └── And it should revert with "NotLaunched".
+└── When sender is blacklisted
+    └── It should revert.
+        ├── Because blacklisted users cannot swap.
+        └── And it should revert with "BlacklistedUser".
+└── When sender is subject to a cooldown period
+    └── When cooldowns are enabled
+        ├── When sender has swapped recently
+        │   └── It should revert.
+        │       ├── Because cooldown enforcement should block rapid trades.
+        │       └── And it should revert with "CooldownActive".
+        └── When sender has not swapped recently
+            ├── It should allow the swap.
+            │   └── Because cooldown conditions are met.
+            └── It should update the {userLastTransactionBlock}.
+                └── Because cooldown tracking should be updated.
+└── When swap amount exceeds max sell limit
+    └── When limits are enabled
         └── It should revert.
-            └── Because swaps cannot happen before launch.
-            └── And it should revert with "NotLaunched".
-    └── When the sender is blacklisted
-        └── It should revert.
-            └── Because blacklisted users cannot swap.
-            └── And it should revert with "BlacklistedUser".
-    └── When the sender is subject to a cooldown period
-        └── When cooldowns are enabled
-            └── And the sender has swapped recently
-                └── It should revert.
-                    └── Because cooldown enforcement should block rapid trades.
-                    └── And it should revert with "CooldownActive".
-            └── And the sender has not swapped recently
-                └── It should allow the swap.
-                    └── Because cooldown conditions are met.
-                └── It should update `userLastTransactionBlock`.
-                    └── Because cooldown tracking should be updated.
-    └── When the swap amount exceeds the max sell limit
-        └── When limits are enabled
-            └── It should revert.
-                └── Because the user cannot sell more than `maxSellAmount`.
-                └── And it should revert with "MaxSellExceeded".
-        └── When limits are disabled
-            └── It should allow the swap.
-                └── Because trade limits are not enforced.
-    └── When the sender is exempt from limits
+            ├── Because the user cannot sell more than {maxSellAmount}.
+            └── And it should revert with "MaxSellExceeded".
+    └── When limits are disabled
         └── It should allow the swap.
-            └── Because `isExcludedFromLimits[sender]` is true.
-    └── When the sender is exempt from fees
-        └── It should process the swap without fees.
-            └── Because excluded addresses should not pay swap fees.
-        └── It should not emit a `HookFee` event.
-            └── Because no fees are collected.
-    └── When fees are globally disabled
-        └── It should process the swap without fees.
-            └── Because `isFeeEnabled` is false.
-        └── It should not emit a `HookFee` event.
-            └── Because fees are not applied.
-    └── When fees are enabled and the sender is not exempt
-        └── It should apply the sell fee.
-            └── Because fees should be deducted from the swapped amount.
-        └── It should deduct the correct fee amount based on `sellFeeBips`.
-            └── Because the fee percentage should be applied correctly.
-        └── It should emit a `HookFee` event.
-            └── Because fee collection must be logged.
-    └── When the swap is successful
-        └── It should deduct tokens from the sender.
-            └── Because the user is selling tokens for ETH.
-        └── It should credit the correct ETH amount to the sender.
-            └── Because the user is receiving the swapped ETH.
-        └── It should update the pool balances correctly.
-            └── Because the pool needs to reflect the updated liquidity.
-        └── It should emit a `Swap` event.
-            └── Because swaps must be logged for tracking.
+            └── Because trade limits are not enforced.
+└── When sender is exempt from limits
+    └── It should allow the swap.
+        └── Because {isExcludedFromLimits[sender]} is true.
+└── When sender is exempt from fees
+    ├── It should process the swap without fees.
+    │   └── Because excluded addresses should not pay swap fees.
+    └── It should not emit a {HookFee} event.
+        └── Because no fees are collected.
+└── When fees are globally disabled
+    ├── It should process the swap without fees.
+    │   └── Because {isFeeEnabled} is false.
+    └── It should not emit a {HookFee} event.
+        └── Because fees are not applied.
+└── When fees are enabled and sender is not exempt
+    ├── It should apply the sell fee.
+    │   └── Because fees should be deducted from the swapped amount.
+    ├── It should deduct the correct fee amount based on {sellFeeBips}.
+    │   └── Because the fee percentage should be applied correctly.
+    └── It should emit a {HookFee} event.
+        └── Because fee collection must be logged.
+└── When swap is successful
+    ├── It should deduct tokens from sender.
+    │   └── Because the user is selling tokens for ETH.
+    ├── It should credit the correct ETH amount to sender.
+    │   └── Because the user is receiving the swapped ETH.
+    ├── It should update the pool balances correctly.
+    │   └── Because the pool needs to reflect the updated liquidity.
+    └── It should emit a {Swap} event.
+        └── Because swaps must be logged for tracking.

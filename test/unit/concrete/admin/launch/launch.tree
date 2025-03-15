@@ -1,19 +1,19 @@
-Launch_Unit_Concrete_Test
-└── When launch is called // The launch function is responsible for enabling trading.
-    └── When a non-owner tries to call launch
-        └── It should revert.
-            └── Because only the owner has permission to launch trading.
-            └── And it should revert with OwnableUnauthorizedAccount.
-    └── When the contract is not yet launched
-        └── It should set isLaunched to true.
-            └── Because calling launch should enable trading.
-        └── It should set launchBlock to the current block number.
-            └── Because launchBlock is recorded at the time of enabling trading.
-        └── It should set launchTime to the current timestamp.
-            └── Because launchTime is recorded at the time of enabling trading.
-        └── It should emit a Launched event.
-            └── Because the launch event signals that trading has started.
+FeeHook_Launch_Unit_Concrete_Test
+├── When caller is not the owner
+│   └── It should revert.
+│       ├── Because only the contract owner has permission to launch trading.
+│       └── And it should revert with OwnableUnauthorizedAccount.
+└── When caller is the owner
+    ├── When the contract is not yet launched
+    │   ├── It should set {isLaunched} to true.
+    │   │   └── Because calling launch should enable trading.
+    │   ├── It should set {launchBlock} to the current block number.
+    │   │   └── Because {launchBlock} is recorded at the time of enabling trading.
+    │   ├── It should set {launchTime} to the current timestamp.
+    │   │   └── Because {launchTime} is recorded at the time of enabling trading.
+    │   └── It should emit a {Launched} event.
+    │       └── Because the {Launched} event signals that trading has started.
     └── When the contract has already been launched
         └── It should revert.
-            └── Because trading can only be enabled once.
-            └── And it should revert with the error "AlreadyLaunched".
+            ├── Because trading can only be enabled once.
+            └── And it should revert with "AlreadyLaunched".
