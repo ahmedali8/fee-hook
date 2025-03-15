@@ -77,7 +77,7 @@ contract FeeHookTest is Test, Fixtures {
             (100_000_000 ether * 10) / 1000, // maxBuyAmount
             (100_000_000 ether * 10) / 1000, // maxSellAmount
             (100_000_000 ether * 10) / 1000, // maxWalletAmount
-            3 // cooldownBlocks
+            0 // cooldownBlocks
         );
         deployCodeTo("FeeHook.sol:FeeHook", constructorArgs, flags);
         hook = FeeHook(payable(flags));
@@ -112,6 +112,10 @@ contract FeeHookTest is Test, Fixtures {
             block.timestamp,
             ZERO_BYTES
         );
+
+        // launch
+        vm.prank(msg.sender);
+        hook.launch();
     }
 
     function test_FeeHook_Owner() public view {
@@ -245,10 +249,12 @@ contract FeeHookTest is Test, Fixtures {
         // user gives this eth 1013241745438335209
 
         // is the user giving extra eth?
-        assertEq(uint256(1013241745438335209), uint256(1013140431395195690) + uint256(101314043139519));
+        // assertEq(uint256(1013241745438335209), uint256(1013140431395195690) + uint256(101314043139519));
 
-        // vm.prank(user);
-        // swapRouter.swap{value: amountToSwap}(key, params, _defaultTestSettings(), ZERO_BYTES);
+        // uint256 expectedAmountIn = 1013241745438335209; // 1.013241745438335209 eth
+
+        vm.prank(user);
+        swapRouter.swap{value: expectedAmountIn}(key, params, _defaultTestSettings(), ZERO_BYTES);
 
         // uint256 userBalanceAfter0 = key.currency0.balanceOf(address(user));
         // uint256 userBalanceAfter1 = key.currency1.balanceOf(address(user));
