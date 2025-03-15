@@ -55,30 +55,22 @@ contract FeeHook is BaseHook, Ownable {
 
     address public constant DEAD_ADDRESS = address(0xdEaD);
 
+    /// @notice Flag indicating whether trading is enabled.
+    uint32 public launchBlock;
+    uint64 public launchTime;
+
     /// @notice Swap fees in basis points (1 bip = 0.0001%)
     /// Fee percentage represented in hundredths of a bip (1 bip = 0.0001%).
     uint24 public buyFeeBips;
     uint24 public sellFeeBips;
 
+    /// @notice Cooldown period for transactions (blocks)
+    uint32 public cooldownBlocks;
+
     /// @notice Maximum buy, sell, and wallet limits
     uint256 public maxBuyAmount;
     uint256 public maxSellAmount;
     uint256 public maxWalletAmount;
-
-    /// @notice Whether cooldowns are enabled
-    bool public isCooldownEnabled;
-
-    /// @notice Cooldown period for transactions (blocks)
-    uint32 public cooldownBlocks;
-
-    bool public isLimitsEnabled;
-
-    bool public isFeeEnabled;
-
-    /// @notice Flag indicating whether trading is enabled.
-    bool public isLaunched;
-    uint32 public launchBlock;
-    uint64 public launchTime;
 
     /// @notice Tracks last transaction block for cooldown enforcement
     mapping(address user => uint32 lastBlock) public userLastTransactionBlock;
@@ -90,7 +82,7 @@ contract FeeHook is BaseHook, Ownable {
     mapping(address user => bool excluded) public isExcludedFromFees;
 
     /// @notice Excluded from trading limits
-    mapping(address user => bool excluded) public isExcludedFromLimits;
+    mapping(address user => bool excluded) public isExcludedFromTradeLimits;
 
     /// ------------------------------- ///
     ///          EVENTS                 ///
@@ -104,7 +96,7 @@ contract FeeHook is BaseHook, Ownable {
     event FeeEnabledUpdated(bool enabled);
     event CooldownEnabledUpdated(bool enabled);
     event AddressBlacklisted(address indexed user, bool status);
-    event AddressWhitelisted(address indexed user, bool isExcludedFromFees, bool isExcludedFromLimits);
+    event AddressWhitelisted(address indexed user, bool isExcludedFromFees, bool isExcludedFromTradeLimits);
 
     /// @notice Emitted when a swap fee is collected.
     /// @param id The pool ID where the fee was taken.
@@ -152,17 +144,6 @@ contract FeeHook is BaseHook, Ownable {
         // Set cooldown settings
         cooldownBlocks = _cooldownBlocks;
 
-        // Default state settings
-        isLimitsEnabled = true;
-        isFeeEnabled = true;
-        // isCooldownEnabled = false;
-
-        // address[] memory _excluded = new address[](2);
-        // _excluded[0] = DEAD_ADDRESS;
-        // _excluded[1] = _initialOwner;
-        // for (uint256 i = 0; i < _excluded.length; i++) {
-        //     _updateWhitelist(_excluded[i], true, true);
-        // }
         _updateWhitelist(DEAD_ADDRESS, true, true);
     }
 
@@ -207,15 +188,15 @@ contract FeeHook is BaseHook, Ownable {
         if (_exactInput != params.zeroForOne) return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
 
         // Trading must be enabled
-        if (!isLaunched) revert NotLaunched();
+        if (!isLaunched()) revert NotLaunched();
 
         // Sender cannot be blacklisted
         if (isBlacklisted[sender]) revert BlacklistedUser();
 
         // Transaction Limits (Limits must be enabled OR sender must not be excluded from limits)
-        if (isLimitsEnabled && !isExcludedFromLimits[sender]) {
+        if (isTradeLimitsEnabled() && !isExcludedFromTradeLimits[sender]) {
             // Cooldown Enforcement
-            if (isCooldownEnabled) {
+            if (isCooldownEnabled()) {
                 uint32 _blockNumber = uint32(block.number);
                 if (_blockNumber < userLastTransactionBlock[sender] + cooldownBlocks) {
                     revert CooldownActive();
@@ -234,7 +215,7 @@ contract FeeHook is BaseHook, Ownable {
         }
 
         // Global Fee Disable Check OR Fee Exemption Check
-        if (!isFeeEnabled || isExcludedFromFees[sender]) {
+        if (!isFeeEnabled() || isExcludedFromFees[sender]) {
             return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(0, 0), 0);
         }
 
@@ -286,7 +267,7 @@ contract FeeHook is BaseHook, Ownable {
         if (_exactInput == params.zeroForOne) return (BaseHook.afterSwap.selector, 0);
 
         // Global Fee Disable Check OR Fee Exemption Check
-        if (!isFeeEnabled || isExcludedFromFees[sender]) return (BaseHook.afterSwap.selector, 0);
+        if (!isFeeEnabled() || isExcludedFromFees[sender]) return (BaseHook.afterSwap.selector, 0);
 
         uint256 _feeAmount;
         unchecked {
@@ -341,9 +322,8 @@ contract FeeHook is BaseHook, Ownable {
     /// @notice Enables trading by setting launch parameters.
     /// @dev Can only be called once.
     function launch() external onlyOwner {
-        if (isLaunched) revert AlreadyLaunched();
+        if (uint32(launchBlock) > 0 || uint64(launchTime) > 0) revert AlreadyLaunched();
 
-        isLaunched = true;
         launchBlock = uint32(block.number);
         launchTime = uint64(block.timestamp);
 
@@ -356,27 +336,6 @@ contract FeeHook is BaseHook, Ownable {
         maxSellAmount = newMaxSell;
         maxWalletAmount = newMaxWallet;
         emit TradeLimitsUpdated(newMaxBuy, newMaxSell, newMaxWallet);
-    }
-
-    /// @notice Enables or disables trading limits.
-    /// @param status `true` to enable limits, `false` to disable.
-    function setLimitsEnabled(bool status) external onlyOwner {
-        isLimitsEnabled = status;
-        emit LimitsEnabledUpdated(status);
-    }
-
-    /// @notice Enables or disables fee collection.
-    /// @param status `true` to enable fee, `false` to disable.
-    function setFeeEnabled(bool status) external onlyOwner {
-        isFeeEnabled = status;
-        emit FeeEnabledUpdated(status);
-    }
-
-    /// @notice Enables or disables the cooldown mechanism.
-    /// @param status `true` to enable cooldowns, `false` to disable.
-    function setCooldownEnabled(bool status) external onlyOwner {
-        isCooldownEnabled = status;
-        emit CooldownEnabledUpdated(status);
     }
 
     function setCooldownBlocks(uint32 newCooldownBlocks) external onlyOwner {
@@ -436,6 +395,38 @@ contract FeeHook is BaseHook, Ownable {
     }
 
     /// ------------------------------- ///
+    ///       CONSTANT FUNCTIONS        ///
+    /// ------------------------------- ///
+
+    /// @notice Whether trading is enabled.
+    /// @dev Trading is enabled if launchBlock and launchTime are greater than zero.
+    /// @return `true` if trading is enabled, `false` otherwise.
+    function isLaunched() public view returns (bool) {
+        return launchBlock > 0 && launchTime > 0;
+    }
+
+    /// @notice Whether cooldowns are enabled
+    /// @dev If cooldownBlocks is zero, then cooldowns are disabled
+    /// @return `true` if cooldowns are enabled, `false` otherwise.
+    function isCooldownEnabled() public view returns (bool) {
+        return cooldownBlocks > 0;
+    }
+
+    /// @notice Whether trading limits are enabled.
+    /// @dev If buyFeeBips or sellFeeBips are zero, then fees are disabled.
+    /// @return `true` if trading limits are enabled, `false` otherwise.
+    function isFeeEnabled() public view returns (bool) {
+        return buyFeeBips > 0 || sellFeeBips > 0;
+    }
+
+    /// @notice Whether trading limits are enabled.
+    /// @dev If maxBuyAmount, maxSellAmount, and maxWalletAmount are all zero, then limits are disabled.
+    /// @return `true` if trading limits are enabled, `false` otherwise.
+    function isTradeLimitsEnabled() public view returns (bool) {
+        return maxBuyAmount > 0 && maxSellAmount > 0 && maxWalletAmount > 0;
+    }
+
+    /// ------------------------------- ///
     ///       INTERNAL FUNCTIONS        ///
     /// ------------------------------- ///
 
@@ -445,7 +436,7 @@ contract FeeHook is BaseHook, Ownable {
     function _updateBlacklist(address user, bool status) internal {
         if (
             user == address(0) || user == address(poolManager) || user == address(this) || isExcludedFromFees[user]
-                || isExcludedFromLimits[user] || isBlacklisted[user] == status
+                || isExcludedFromTradeLimits[user] || isBlacklisted[user] == status
         ) {
             revert InvalidBlacklistAction();
         }
@@ -459,17 +450,8 @@ contract FeeHook is BaseHook, Ownable {
     /// @param excludeFees True to exclude from fees, false to include.
     /// @param excludeLimits True to exclude from limits, false to include.
     function _updateWhitelist(address user, bool excludeFees, bool excludeLimits) internal {
-        console2.log("user: ", user);
-        console2.log("isExcludedFromFees[user]: ", isExcludedFromFees[user]);
-        console2.log("isExcludedFromLimits[user]: ", isExcludedFromLimits[user]);
-        console2.log("excludeFees: ", excludeFees);
-        console2.log("excludeLimits: ", excludeLimits);
-
         bool _feesUnchanged = isExcludedFromFees[user] == excludeFees;
-        bool _limitsUnchanged = isExcludedFromLimits[user] == excludeLimits;
-
-        console2.log("_feesUnchanged: ", _feesUnchanged);
-        console2.log("_limitsUnchanged: ", _limitsUnchanged);
+        bool _limitsUnchanged = isExcludedFromTradeLimits[user] == excludeLimits;
 
         // Check if user is zero address or both values are unchanged
         if (user == address(0) || (_feesUnchanged && _limitsUnchanged)) {
@@ -477,12 +459,8 @@ contract FeeHook is BaseHook, Ownable {
         }
 
         // Only update storage if values are changing
-        if (!_feesUnchanged) {
-            isExcludedFromFees[user] = excludeFees;
-        }
-        if (!_limitsUnchanged) {
-            isExcludedFromLimits[user] = excludeLimits;
-        }
+        if (!_feesUnchanged) isExcludedFromFees[user] = excludeFees;
+        if (!_limitsUnchanged) isExcludedFromTradeLimits[user] = excludeLimits;
 
         emit AddressWhitelisted(user, excludeFees, excludeLimits);
     }
