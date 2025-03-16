@@ -1,0 +1,30 @@
+FeeHook_SetLPFee_Unit_Concrete_Test
+├── When caller is not the owner
+│   └── It should revert.
+│       ├── Because only the contract owner can update LP fees.
+│       └── And it should revert with OwnableUnauthorizedAccount.
+└── When caller is the owner
+    ├── When setting an invalid LP fee
+    │   └── It should revert.
+    │       ├── Because invalid LP fees should not be accepted.
+    │       └── And it should revert with an appropriate error.
+    ├── When retrieving the old LP fee from {getSlot0}
+    │   ├── It should correctly fetch the current LP fee.
+    │   │   └── Because the event should log old and new fees.
+    │   └── It should not update {dynamicLPFee} if the value is unchanged.
+    │       └── Because unnecessary writes should be avoided.
+    ├── When setting LP fees on an invalid pool key
+    │   └── It should revert.
+    │       ├── Because only valid pools can have dynamic LP fees.
+    │       └── And it should revert with an appropriate error.
+    ├── When setting LP fees on a non-dynamic fee pool
+    │   └── It should revert.
+    │       ├── Because the pool must support dynamic LP fees.
+    │       └── And it should revert with "NotDynamicFee".
+    └── When setting a valid LP fee
+        ├── It should update {dynamicLPFee}.
+        │   └── Because the contract must enforce the new dynamic LP fee.
+        ├── It should update the LP fee in the pool manager.
+        │   └── Because {poolManager.updateDynamicLPFee} must be called.
+        └── It should emit an {LPFeeUpdated} event.
+            └── Because logs should track LP fee updates.

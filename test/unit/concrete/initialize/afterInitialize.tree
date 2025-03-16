@@ -1,0 +1,10 @@
+FeeHook_AfterInitialize_Unit_Concrete_Test
+└── When initializing a pool
+    ├── It should set the LP fee to {INITIAL_LP_FEE}.
+    │   └── Because default LP fees must be enforced.
+    ├── It should update {dynamicLPFee} state variable.
+    │   └── Because dynamic LP fees should be tracked.
+    ├── It should call {updateDynamicLPFee} on the pool manager.
+    │   └── Because the LP fee must be updated at the protocol level.
+    └── It should emit an {LPFeeUpdated} event.
+        └── Because logs should track LP fee initialization.
