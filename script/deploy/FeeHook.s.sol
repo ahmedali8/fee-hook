@@ -10,7 +10,7 @@ import {Constants} from "../base/Constants.sol";
 import {FeeHook} from "src/FeeHook.sol";
 
 /// @notice Mines the address and deploys the FeeHook.sol Hook contract
-contract DeployFeeHook is Script, Constants {
+contract DeployFeeHookScript is Script, Constants {
     function setUp() public {}
 
     function deployFeeHook(
@@ -24,8 +24,8 @@ contract DeployFeeHook is Script, Constants {
     ) internal returns (FeeHook feeHook) {
         // hook contracts must have specific flags encoded in the address
         uint160 flags = uint160(
-            Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_FLAG
-                | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+            Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG
+                | Hooks.AFTER_SWAP_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
         );
 
         // Mine a salt that will produce a hook address with the correct flags
@@ -53,7 +53,7 @@ contract DeployFeeHook is Script, Constants {
             cooldownBlocks
         );
 
-        require(address(feeHook) == hookAddress, "CounterScript: hook address mismatch");
+        require(address(feeHook) == hookAddress, "DeployFeeHookScript: hook address mismatch");
     }
 
     function run() public {

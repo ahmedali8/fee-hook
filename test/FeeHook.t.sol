@@ -16,6 +16,7 @@ import {CurrencyLibrary, Currency} from "v4-core/src/types/Currency.sol";
 import {PoolSwapTest} from "v4-core/src/test/PoolSwapTest.sol";
 import {LiquidityAmounts} from "v4-core/test/utils/LiquidityAmounts.sol";
 import {Constants} from "v4-core/test/utils/Constants.sol";
+import {LPFeeLibrary} from "v4-core/src/libraries/LPFeeLibrary.sol";
 
 // v4-periphery
 import {IPositionManager} from "v4-periphery/src/interfaces/IPositionManager.sol";
@@ -65,8 +66,8 @@ contract FeeHookTest is Test, Fixtures {
         // Deploy the hook to an address with the correct flags
         address flags = address(
             uint160(
-                Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_FLAG
-                    | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+                Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG
+                    | Hooks.AFTER_SWAP_FLAG | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
             ) ^ (0x4444 << 144) // Namespace the hook to avoid collisions
         );
         bytes memory constructorArgs = abi.encode(
@@ -84,9 +85,11 @@ contract FeeHookTest is Test, Fixtures {
         vm.label(flags, "FeeHook");
 
         // Create the pool
-        key = PoolKey(CurrencyLibrary.ADDRESS_ZERO, currency1, 3000, 60, IHooks(hook));
+        key = PoolKey(CurrencyLibrary.ADDRESS_ZERO, currency1, LPFeeLibrary.DYNAMIC_FEE_FLAG, 60, IHooks(hook)); // Dynamic Fee -> 60 tick spacing
         poolId = key.toId();
         manager.initialize(key, SQRT_PRICE_1_1);
+
+        console2.log("lpFee: ", _fetchPoolLPFee());
 
         // Provide full-range liquidity to the pool
         tickLower = TickMath.minUsableTick(key.tickSpacing);
@@ -468,6 +471,10 @@ contract FeeHookTest is Test, Fixtures {
             vm.prank(_user);
             MockERC20(token).approve(toApprove[i], Constants.MAX_UINT256);
         }
+    }
+
+    function _fetchPoolLPFee() internal view returns (uint24 lpFee) {
+        (,,, lpFee) = manager.getSlot0(poolId);
     }
 }
 

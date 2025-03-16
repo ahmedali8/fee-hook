@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 // TYPES
 import {Currency, CurrencyLibrary} from "v4-core/src/types/Currency.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {BeforeSwapDelta, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/src/types/BalanceDelta.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
@@ -11,6 +12,8 @@ import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 // LIBRARIES
 import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {SafeCast} from "v4-core/src/libraries/SafeCast.sol";
+import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
+import {LPFeeLibrary} from "v4-core/src/libraries/LPFeeLibrary.sol";
 import {FeeLibrary} from "./libraries/FeeLibrary.sol";
 
 // INTERFACES
@@ -26,8 +29,7 @@ import "forge-std/console2.sol";
 /// @notice A Uniswap v4 hook contract that implements fee collection logic before and after swaps.
 /// @dev This contract applies dynamic fees based on swap direction and token flows.
 contract FeeHook is BaseHook, Ownable {
-    using FeeLibrary for uint256;
-    using FeeLibrary for uint24;
+    using StateLibrary for IPoolManager;
     using BalanceDeltaLibrary for BalanceDelta;
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
@@ -47,12 +49,15 @@ contract FeeHook is BaseHook, Ownable {
     error MaxBuyExceeded();
     error MaxSellExceeded();
     error MaxWalletExceeded();
+    /// @dev The hook was attempted to be initialized with a non-dynamic fee.
+    error NotDynamicFee();
 
     /// ------------------------------- ///
     ///         STATE VARIABLES         ///
     /// ------------------------------- ///
 
     address public constant DEAD_ADDRESS = address(0xdEaD);
+    uint24 public constant INITIAL_LP_FEE = 3000; // 0.3%
 
     /// @notice Flag indicating whether trading is enabled.
     uint32 public launchBlock;
@@ -62,13 +67,14 @@ contract FeeHook is BaseHook, Ownable {
     uint24 public buyFeeBips;
     uint24 public sellFeeBips;
 
+    uint24 public dynamicLPFee;
+
     /// @notice Cooldown period for transactions (blocks)
     uint32 public cooldownBlocks;
 
-    /// @notice Maximum buy, sell, and wallet limits
+    uint128 public maxWalletAmount;
     uint128 public maxBuyAmount;
     uint128 public maxSellAmount;
-    uint128 public maxWalletAmount;
 
     /// @notice Tracks last transaction block for cooldown enforcement
     mapping(address user => uint32 lastBlock) public userLastTransactionBlock;
@@ -93,6 +99,7 @@ contract FeeHook is BaseHook, Ownable {
     event LimitsEnabledUpdated(bool enabled);
     event FeeEnabledUpdated(bool enabled);
     event CooldownEnabledUpdated(bool enabled);
+    event LPFeeUpdated(PoolKey key, uint24 oldDynamicLPFee, uint24 newDynamicLPFee);
     event AddressBlacklisted(address indexed user, bool status);
     event AddressWhitelisted(address indexed user, bool isExcludedFromFees, bool isExcludedFromTradeLimits);
     event CurrencyWithdrawn(Currency indexed currency, uint256 amount);
@@ -128,8 +135,8 @@ contract FeeHook is BaseHook, Ownable {
         uint32 _cooldownBlocks
     ) BaseHook(_poolManager) Ownable(_initialOwner) {
         // Validate initial fee values
-        _initialBuyFeeBips.validate();
-        _initialSellFeeBips.validate();
+        FeeLibrary.validate(_initialBuyFeeBips);
+        FeeLibrary.validate(_initialSellFeeBips);
 
         // Set initial fees
         buyFeeBips = _initialBuyFeeBips;
@@ -156,6 +163,12 @@ contract FeeHook is BaseHook, Ownable {
         }
         _updateWhitelist(newOwner, true, true);
         super._transferOwnership(newOwner);
+    }
+
+    function _afterInitialize(address, PoolKey calldata key, uint160, int24) internal override returns (bytes4) {
+        if (!LPFeeLibrary.isDynamicFee(key.fee)) revert NotDynamicFee();
+        _setLPFee(key, INITIAL_LP_FEE);
+        return this.afterInitialize.selector;
     }
 
     /// @notice Hook executed before a swap to deduct fees when applicable.
@@ -216,7 +229,7 @@ contract FeeHook is BaseHook, Ownable {
 
         uint256 _feeAmount;
         unchecked {
-            _feeAmount = _amount.computeFee(_exactInput ? buyFeeBips : sellFeeBips);
+            _feeAmount = FeeLibrary.computeFee(_amount, _exactInput ? buyFeeBips : sellFeeBips);
         }
 
         // If No Fee, Return Early
@@ -268,7 +281,7 @@ contract FeeHook is BaseHook, Ownable {
         unchecked {
             uint24 _feeBips = _exactInput ? sellFeeBips : buyFeeBips;
             uint256 _amount = uint256(uint128(params.zeroForOne ? -delta.amount0() : delta.amount0()));
-            _feeAmount = _amount.computeFee(_feeBips);
+            _feeAmount = FeeLibrary.computeFee(_amount, _feeBips);
         }
 
         if (_feeAmount == 0) return (BaseHook.afterSwap.selector, 0);
@@ -285,8 +298,8 @@ contract FeeHook is BaseHook, Ownable {
     /// @return sellFee The calculated sell fee amount
     function calculateFees(uint256 amount) external view returns (uint256 buyFee, uint256 sellFee) {
         unchecked {
-            buyFee = amount.computeFee(buyFeeBips);
-            sellFee = amount.computeFee(sellFeeBips);
+            buyFee = FeeLibrary.computeFee(amount, buyFeeBips);
+            sellFee = FeeLibrary.computeFee(amount, sellFeeBips);
         }
     }
 
@@ -294,7 +307,7 @@ contract FeeHook is BaseHook, Ownable {
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
             beforeInitialize: false,
-            afterInitialize: false,
+            afterInitialize: true,
             beforeAddLiquidity: false,
             beforeRemoveLiquidity: false,
             afterAddLiquidity: false,
@@ -340,8 +353,8 @@ contract FeeHook is BaseHook, Ownable {
     /// @param newBuyFeeBips New buy fee (in hundredths of a bip).
     /// @param newSellFeeBips New sell fee (in hundredths of a bip).
     function setSwapFees(uint24 newBuyFeeBips, uint24 newSellFeeBips) external onlyOwner {
-        newBuyFeeBips.validate();
-        newSellFeeBips.validate();
+        FeeLibrary.validate(newBuyFeeBips);
+        FeeLibrary.validate(newSellFeeBips);
 
         uint24 _oldBuyFeeBips = buyFeeBips;
         uint24 _oldSellFeeBips = sellFeeBips;
@@ -390,6 +403,12 @@ contract FeeHook is BaseHook, Ownable {
         uint256 _amount = currency.balanceOfSelf();
         currency.transfer(msg.sender, _amount);
         emit CurrencyWithdrawn(currency, _amount);
+    }
+
+    /// Manually update the LP fee
+    // newDynamicLPFee -> fee should be in hundredths of a bip. e.g. 3000 = 0.3%, 10_000 = 1%
+    function setLPFee(PoolKey calldata key, uint24 newDynamicLPFee) external onlyOwner {
+        _setLPFee(key, newDynamicLPFee);
     }
 
     /// ------------------------------- ///
@@ -461,5 +480,16 @@ contract FeeHook is BaseHook, Ownable {
         if (!_limitsUnchanged) isExcludedFromTradeLimits[user] = excludeLimits;
 
         emit AddressWhitelisted(user, excludeFees, excludeLimits);
+    }
+
+    // newDynamicLPFee is being validated in poolManager
+    function _setLPFee(PoolKey calldata key, uint24 newDynamicLPFee) internal {
+        uint24 _oldDynamicLPFee;
+        (,,, _oldDynamicLPFee) = poolManager.getSlot0(key.toId());
+
+        dynamicLPFee = newDynamicLPFee;
+        poolManager.updateDynamicLPFee(key, newDynamicLPFee);
+
+        emit LPFeeUpdated(key, _oldDynamicLPFee, newDynamicLPFee);
     }
 }
