@@ -2,7 +2,7 @@
 pragma solidity 0.8.26;
 
 // TYPES
-import {Currency} from "v4-core/src/types/Currency.sol";
+import {Currency, CurrencyLibrary} from "v4-core/src/types/Currency.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {BeforeSwapDelta, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/src/types/BalanceDelta.sol";
@@ -30,6 +30,7 @@ contract FeeHook is BaseHook, Ownable {
     using FeeLibrary for uint24;
     using BalanceDeltaLibrary for BalanceDelta;
     using PoolIdLibrary for PoolKey;
+    using CurrencyLibrary for Currency;
     using SafeCast for *;
 
     /// ------------------------------- ///
@@ -94,6 +95,7 @@ contract FeeHook is BaseHook, Ownable {
     event CooldownEnabledUpdated(bool enabled);
     event AddressBlacklisted(address indexed user, bool status);
     event AddressWhitelisted(address indexed user, bool isExcludedFromFees, bool isExcludedFromTradeLimits);
+    event CurrencyWithdrawn(Currency indexed currency, uint256 amount);
 
     /// @notice Emitted when a swap fee is collected.
     /// @param id The pool ID where the fee was taken.
@@ -145,11 +147,7 @@ contract FeeHook is BaseHook, Ownable {
     }
 
     /// @notice Allows the contract to receive ETH.
-    /// TODO: distribute eth to wallets
-    receive() external payable {
-        // (bool _success,) = owner().call{value: msg.value}("");
-        // if (!_success) revert ETHTransferFailed();
-    }
+    receive() external payable {}
 
     function _transferOwnership(address newOwner) internal override {
         address _oldOwner = owner();
@@ -386,6 +384,12 @@ contract FeeHook is BaseHook, Ownable {
         for (uint256 i = 0; i < users.length; i++) {
             _updateWhitelist(users[i], excludeFees, excludeLimits);
         }
+    }
+
+    function withdrawCurrency(Currency currency) external onlyOwner {
+        uint256 _amount = currency.balanceOfSelf();
+        currency.transfer(msg.sender, _amount);
+        emit CurrencyWithdrawn(currency, _amount);
     }
 
     /// ------------------------------- ///
