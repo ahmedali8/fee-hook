@@ -1,0 +1,16 @@
+FeeHook_SetTradeLimits_Unit_Concrete_Test
+├── When caller is not the owner
+│   └── It should revert.
+│       ├── Because only the contract owner can update trade limits.
+│       └── And it should revert with OwnableUnauthorizedAccount.
+└── When caller is the owner
+    ├── When setting new trade limits
+    │   ├── It should update {maxBuyAmount}, {maxSellAmount}, and {maxWalletAmount}.
+    │   │   └── Because the contract must enforce updated trade limits correctly.
+    │   └── It should emit a {TradeLimitsUpdated} event.
+    │       └── Because logs should track trade limit changes.
+    └── When setting trade limits to zero
+        ├── It should update {maxBuyAmount}, {maxSellAmount}, and {maxWalletAmount} to zero.
+        │   └── Because zero limits effectively disable trading limits.
+        └── It should emit a {TradeLimitsUpdated} event.
+            └── Because logs should track trade limit removal.

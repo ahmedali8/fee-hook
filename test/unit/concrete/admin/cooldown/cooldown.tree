@@ -5,21 +5,12 @@ FeeHook_Cooldown_Unit_Concrete_Test
 │       └── And it should revert with OwnableUnauthorizedAccount.
 └── When caller is the owner
     ├── When setting cooldown blocks to zero
-    │   └── It should revert.
-    │       ├── Because cooldown blocks must be greater than zero.
-    │       └── And it should revert with InvalidCooldown.
-    ├── When setting a valid cooldown block duration
-    │   ├── It should update the {cooldownBlocks} state variable.
-    │   │   └── Because the contract should enforce the new cooldown duration.
+    │   ├── It should update {cooldownBlocks} to zero.
+    │   │   └── Because setting cooldownBlocks to zero disables cooldown enforcement.
     │   └── It should emit a {CooldownBlocksUpdated} event.
-    │       └── Because logs should track changes to cooldown settings.
-    ├── When enabling cooldowns
-    │   ├── It should update {isCooldownEnabled} to true.
-    │   │   └── Because cooldowns should be enforced.
-    │   └── It should emit a {CooldownEnabledUpdated} event.
-    │       └── Because logs should track cooldown activation.
-    └── When disabling cooldowns
-        ├── It should update {isCooldownEnabled} to false.
-        │   └── Because cooldowns should no longer be enforced.
-        └── It should emit a {CooldownEnabledUpdated} event.
-            └── Because logs should track cooldown deactivation.
+    │       └── Because logs should track cooldown settings updates.
+    └── When setting a valid cooldown block duration
+        ├── It should update the {cooldownBlocks} state variable.
+        │   └── Because the contract should enforce the new cooldown duration.
+        └── It should emit a {CooldownBlocksUpdated} event.
+            └── Because logs should track changes to cooldown settings.

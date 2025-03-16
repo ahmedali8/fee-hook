@@ -1,0 +1,26 @@
+FeeHook_Fees_Unit_Concrete_Test
+├── When caller is not the owner
+│   └── It should revert.
+│       ├── Because only the contract owner can update fees.
+│       └── And it should revert with OwnableUnauthorizedAccount.
+└── When caller is the owner
+    ├── When setting an invalid fee value
+    │   └── It should revert.
+    │       ├── Because fee values must pass validation.
+    │       └── And it should revert with an appropriate error from {validate()}.
+    └── When setting new valid fee values
+        ├── When disabling fees
+        │   ├── It should update {isFeeEnabled} to false.
+        │   │   └── Because fees should not be charged when disabled.
+        │   ├── It should set {buyFeeBips} and {sellFeeBips} to zero.
+        │   │   └── Because fees are disabled when both are zero.
+        │   └── It should emit a {FeeEnabledUpdated} event.
+        │       └── Because logs should track fee deactivation.
+        └── When enabling fees
+            ├── It should update {isFeeEnabled} to true.
+            │   ├── Because fees should be applied when enabled.
+            │   └── And it should set {buyFeeBips} and {sellFeeBips} to non-zero values.
+            ├── It should validate that at least one fee is greater than zero.
+            │   └── Because {isFeeEnabled} should return true only when fees exist.
+            └── It should emit a {FeeEnabledUpdated} event.
+                └── Because logs should track fee activation.

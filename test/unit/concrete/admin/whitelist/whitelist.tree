@@ -21,18 +21,18 @@ FeeHook_SetWhitelist_Unit_Concrete_Test
     │   ├── When adding a new user to the whitelist
     │   │   ├── It should update the {isExcludedFromFees} mapping.
     │   │   │   └── Because the user should be marked as fee-exempt.
-    │   │   ├── It should update the {isExcludedFromLimits} mapping.
+    │   │   ├── It should update the {isExcludedFromTradeLimits} mapping.
     │   │   │   └── Because the user should be marked as limit-exempt.
     │   │   └── It should emit an {AddressWhitelisted} event when a user is whitelisted.
     │   └──When modifying an existing whitelist entry
     │       ├── When modifying only fee exemption
     │       │   ├── It should update the {isExcludedFromFees} mapping.
     │       │   │   └── Because the fee exemption status should change.
-    │       │   ├── It should not update the {isExcludedFromLimits} mapping.
+    │       │   ├── It should not update the {isExcludedFromTradeLimits} mapping.
     │       │   │   └── Because the limit exemption remains unchanged.
     │       │   └── It should emit an {AddressWhitelisted} event when fee exemption is modified.
     │       └── When modifying only limit exemption
-    │           ├── It should update the {isExcludedFromLimits} mapping.
+    │           ├── It should update the {isExcludedFromTradeLimits} mapping.
     │           │   └── Because the limit exemption status should change.
     │           ├── It should not update the {isExcludedFromFees} mapping.
     │           │   └── Because the fee exemption remains unchanged.
@@ -41,17 +41,17 @@ FeeHook_SetWhitelist_Unit_Concrete_Test
         ├── When whitelisting multiple users
         │   ├── It should correctly update the {isExcludedFromFees} mapping for all addresses.
         │   │   └── Because each address should be marked as fee-exempt.
-        │   ├── It should correctly update the {isExcludedFromLimits} mapping for all addresses.
+        │   ├── It should correctly update the {isExcludedFromTradeLimits} mapping for all addresses.
         │   │   └── Because each address should be marked as limit-exempt.
         │   └── It should emit multiple {AddressWhitelisted} events when multiple users are whitelisted.
         └── When modifying whitelist entries in a batch
             ├── When modifying only fee exemptions
             │   ├── It should update the {isExcludedFromFees} mapping for all addresses.
             │   │   └── Because the fee exemption status should change.
-            │   ├── It should not update the {isExcludedFromLimits} mapping.
+            │   ├── It should not update the {isExcludedFromTradeLimits} mapping.
             │   │   └── Because the limit exemption remains unchanged.
             └── When modifying only limit exemptions
-                ├── It should update the {isExcludedFromLimits} mapping for all addresses.
+                ├── It should update the {isExcludedFromTradeLimits} mapping for all addresses.
                 │   └── Because the limit exemption status should change.
                 └── It should not update the {isExcludedFromFees} mapping.
                     └── Because the fee exemption remains unchanged.

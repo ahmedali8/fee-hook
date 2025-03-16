@@ -28,7 +28,7 @@ FeeHook_SwapExactETHForTokens_Unit_Concrete_Test
             └── Because trade limits are not enforced.
 └── When swap would exceed max wallet limit
     └── When limits are enabled
-        ├── When user's balance + swap amount > {maxWalletAmount}
+        ├── When user new balance exceeds maxWalletAmount
         │   └── It should revert.
         │       ├── Because the user cannot hold more than {maxWalletAmount}.
         │       └── And it should revert with "MaxWalletExceeded".
