@@ -14,7 +14,7 @@
     "typescript": "^4.8.4"
   },
   "scripts": {
-    "build": "bun install && node build.js && rm -rf node_modules",
+    "build": "npm install && node build.js && rm -rf node_modules",
     "forge-test-getOutputAmount": "node dist/getOutputAmount.js",
     "forge-test-getInputAmount": "node dist/getInputAmount.js"
   },
